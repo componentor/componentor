@@ -101,7 +101,125 @@ export default async ({ knex, table }) => {
 
   repos.on('push', async (push) => {
     console.log(`push ${push.repo}/${push.commit} ( ${push.branch} )`)
+
     push.accept()
+
+    // Wait for the push to complete, then update workdir
+    push.once('exit', async () => {
+      console.log('Push completed, updating workdir...', { repo: push.repo, branch: push.branch, commit: push.commit })
+      if (push.repo === 'bare.git') {
+        try {
+          const branch = push.branch
+          const commitOid = push.commit
+
+          // Verify the commit exists in bare repo
+          if (!commitOid) {
+            console.error('No commit OID available from push')
+            return
+          }
+
+          // Check if workdir has uncommitted changes that need stashing
+          const statusMatrix = await git.statusMatrix({ fs, dir: workdirPath })
+          const changedFiles = []
+          const hasChanges = statusMatrix.some(row => {
+            const [filepath, headStatus, workdirStatus, stageStatus] = row
+            const changed = headStatus !== workdirStatus || workdirStatus !== stageStatus
+            if (changed) {
+              changedFiles.push(filepath)
+            }
+            return changed
+          })
+
+          let stashOid = null
+          if (hasChanges) {
+            console.log(`Stashing local changes in workdir before updating...`)
+
+            // Add all changes to staging
+            await git.add({ fs, dir: workdirPath, filepath: '.' })
+
+            stashOid = await git.commit({
+              fs,
+              dir: workdirPath,
+              message: `Auto-stash before push at ${new Date().toISOString()}`,
+              author: {
+                name: 'GitServer Auto-Stash',
+                email: 'auto-stash@gitserver.local'
+              }
+            })
+            console.log(`Created stash: ${stashOid}`)
+          }
+
+          // Copy objects from bare repo to workdir
+          const bareObjectsPath = join(barePath, 'objects')
+          const workdirObjectsPath = join(workdirPath, '.git', 'objects')
+
+          // Copy new objects
+          const copyNewObjects = (srcDir, destDir) => {
+            if (!fs.existsSync(srcDir)) return
+
+            const entries = fs.readdirSync(srcDir, { withFileTypes: true })
+            for (const entry of entries) {
+              const srcPath = join(srcDir, entry.name)
+              const destPath = join(destDir, entry.name)
+
+              if (entry.isDirectory()) {
+                if (!fs.existsSync(destPath)) {
+                  fs.mkdirSync(destPath, { recursive: true })
+                }
+                copyNewObjects(srcPath, destPath)
+              } else if (entry.isFile()) {
+                // Only copy if doesn't exist or is different
+                if (!fs.existsSync(destPath)) {
+                  fs.copyFileSync(srcPath, destPath)
+                }
+              }
+            }
+          }
+
+          copyNewObjects(bareObjectsPath, workdirObjectsPath)
+
+          // Update the branch ref in workdir
+          await git.writeRef({ fs, dir: workdirPath, ref: `refs/heads/${branch}`, value: commitOid, force: true })
+
+          // Checkout the new commit
+          await git.checkout({ fs, dir: workdirPath, ref: branch, force: true })
+
+          // Re-apply stashed changes if any
+          if (stashOid && changedFiles.length > 0) {
+            setTimeout(async () => {
+              try {
+                // Get the current state after checkout
+                const newStatusMatrix = await git.statusMatrix({ fs, dir: workdirPath })
+                const currentFiles = new Set(newStatusMatrix.map(([filepath]) => filepath))
+
+                // Only restore files that still exist in the new commit
+                // Don't restore files that were deleted in the push
+                for (const filepath of changedFiles) {
+                  try {
+                    // Check if file exists in new commit
+                    if (currentFiles.has(filepath)) {
+                      await git.checkout({ fs, dir: workdirPath, ref: stashOid, filepaths: [filepath] })
+                    } else {
+                      console.log(`Skipping ${filepath} - deleted in pushed commit`)
+                    }
+                  } catch (err) {
+                    console.warn(`Could not restore ${filepath}:`, err.message)
+                  }
+                }
+                console.log(`Successfully re-applied stashed changes in workdir`)
+              } catch (error) {
+                console.error(`Warning: Failed to re-apply stash:`, error.message)
+              }
+            }, 1000)
+          }
+
+          console.log(`Successfully pushed changes to workdir (${branch})`)
+        } catch (error) {
+          console.error(`Error pushing to workdir:`, error.message)
+          console.error(error.stack)
+        }
+      }
+    })
   })
 
   repos.on('fetch', async (fetch) => {
