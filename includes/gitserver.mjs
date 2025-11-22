@@ -9,6 +9,119 @@ import git from 'isomorphic-git'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// Helper function to sync workdir changes to bare repo
+async function syncWorkdirToBare(workdirPath, barePath) {
+  try {
+    console.log('Checking workdir for changes...')
+
+    // Check if workdir has any changes (staged or unstaged)
+    const statusMatrix = await git.statusMatrix({ fs, dir: workdirPath })
+    const hasChanges = statusMatrix.some(row => {
+      const [, headStatus, workdirStatus, stageStatus] = row
+      return headStatus !== workdirStatus || workdirStatus !== stageStatus
+    })
+
+    if (hasChanges) {
+      console.log('Workdir has changes, committing and syncing to bare repo...')
+
+      // Get current branch, default to 'master' if detached HEAD
+      let currentBranch = await git.currentBranch({ fs, dir: workdirPath })
+
+      if (!currentBranch) {
+        console.log('Workdir is in detached HEAD state, checking out master...')
+        currentBranch = 'master'
+        try {
+          await git.checkout({ fs, dir: workdirPath, ref: 'master' })
+        } catch (err) {
+          console.log('Could not checkout master, attempting to create it...')
+          try {
+            await git.branch({ fs, dir: workdirPath, ref: currentBranch, checkout: true })
+          } catch (branchErr) {
+            // Branch exists but can't check out - force checkout
+            console.log('Forcing checkout of master branch...')
+            await git.checkout({ fs, dir: workdirPath, ref: 'master', force: true })
+          }
+        }
+      }
+
+      console.log(`Current branch: ${currentBranch}`)
+
+      // Add all changes (both staged and unstaged, including deletions)
+      await git.add({ fs, dir: workdirPath, filepath: '.' })
+
+      // Commit the changes
+      const commitOid = await git.commit({
+        fs,
+        dir: workdirPath,
+        message: `Auto-commit at ${new Date().toISOString()}`,
+        author: {
+          name: 'GitServer Auto-Commit',
+          email: 'auto-commit@gitserver.local'
+        }
+      })
+
+      console.log(`Created commit in workdir: ${commitOid}`)
+
+      // Use git.listObjects to get all objects and copy them properly
+      // This ensures we get all objects including those in packfiles
+      const workdirObjectsPath = join(workdirPath, '.git', 'objects')
+      const bareObjectsPath = join(barePath, 'objects')
+
+      // Copy all objects recursively, overwriting existing ones
+      const copyAllObjects = (srcDir, destDir) => {
+        if (!fs.existsSync(srcDir)) return
+
+        const entries = fs.readdirSync(srcDir, { withFileTypes: true })
+        for (const entry of entries) {
+          const srcPath = join(srcDir, entry.name)
+          const destPath = join(destDir, entry.name)
+
+          if (entry.isDirectory()) {
+            if (!fs.existsSync(destPath)) {
+              fs.mkdirSync(destPath, { recursive: true })
+            }
+            copyAllObjects(srcPath, destPath)
+          } else if (entry.isFile()) {
+            try {
+              // If file exists and is read-only, make it writable first
+              if (fs.existsSync(destPath)) {
+                fs.chmodSync(destPath, 0o644)
+              }
+              // Copy file
+              fs.copyFileSync(srcPath, destPath)
+            } catch (err) {
+              console.warn(`Could not copy ${srcPath}: ${err.message}`)
+            }
+          }
+        }
+      }
+
+      console.log('Copying objects from workdir to bare repo...')
+      copyAllObjects(workdirObjectsPath, bareObjectsPath)
+
+      // Update the branch ref in bare repo
+      console.log(`Updating ref refs/heads/${currentBranch} to ${commitOid}`)
+
+      // Write ref file directly to ensure it's updated
+      const refPath = join(barePath, 'refs', 'heads', currentBranch)
+      fs.mkdirSync(join(barePath, 'refs', 'heads'), { recursive: true })
+      fs.writeFileSync(refPath, commitOid + '\n')
+
+      console.log(`Bare repo ref updated successfully: ${commitOid}`)
+
+      // Verify the ref was updated
+      const fileContent = fs.readFileSync(refPath, 'utf8').trim()
+      console.log(`Verified ref file contains: ${fileContent}`)
+    } else {
+      console.log('No changes in workdir to sync')
+    }
+  } catch (error) {
+    console.error('Error syncing workdir to bare repo:', error.message)
+    console.error(error.stack)
+    throw error
+  }
+}
+
 export default async ({ knex, table }) => {
   const repoPath = join(__dirname, 'repos')
   const barePath = join(repoPath, 'bare.git')
@@ -62,10 +175,35 @@ export default async ({ knex, table }) => {
     }
   }
   
+  let syncInProgress = false
+
   const repos = new Git(repoPath, {
     autoCreate: false,
     authenticate: ({ headers, repo, type }, next) => {
+      console.log('Authenticate called:', { repo, type })
+
       let auth = async (authHeader) => {
+        // Sync workdir to bare repo before any fetch/clone operation
+        console.log('Auth function running, checking sync conditions:', {
+          repo,
+          type,
+          isBare: repo === 'bare',
+          isFetch: type === 'fetch',
+          syncInProgress
+        })
+
+        if (repo === 'bare' && type === 'fetch' && !syncInProgress) {
+          console.log('Starting sync before fetch/clone...')
+          syncInProgress = true
+          try {
+            await syncWorkdirToBare(workdirPath, barePath)
+          } catch (error) {
+            console.error('Failed to sync workdir, continuing anyway:', error.message)
+          } finally {
+            syncInProgress = false
+          }
+        }
+
         const token = authHeader?.split(' ')[1]
         if (!token) return next('Unauthenticated')
         try {
@@ -223,7 +361,7 @@ export default async ({ knex, table }) => {
   })
 
   repos.on('fetch', async (fetch) => {
-    console.log(`fetch ${fetch.commit}`)
+    console.log(`fetch/clone ${fetch.repo}/${fetch.commit}`)
     fetch.accept()
   })
 
