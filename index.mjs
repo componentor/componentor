@@ -57,25 +57,53 @@ export default async ({ req, res, next, router }) => {
     async render() {
 
       const { knex, table } = context
+      let currentJob = null
 
       const repos = await git({
         knex,
         table,
-        onBuildStart: () => {
-          console.log('Build started')
-          // TODO: Emit to websocket/SSE
+        onBuildStart: async () => {
+          // Create job for build process
+          currentJob = await hooks.createJob({
+            name: 'Git Build',
+            description: 'Building theme from git repository',
+            type: 'build',
+            iconSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m7.5 4.27 9 5.15" />
+              <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+              <path d="m3.3 7 8.7 5 8.7-5" />
+              <path d="M12 22V12" />
+            </svg>`,
+            source: 'hello-coral-theme',
+            createdBy: req.user?.id || null,
+            showNotification: true
+          })
+
+          await currentJob.start()
         },
-        onBuildProgress: (output, stream, percentage) => {
-          console.log(`Build progress [${percentage}%]:`, output.trim())
-          // TODO: Emit to websocket/SSE
+        onBuildProgress: async (output, stream, percentage) => {
+          // Update job progress
+          if (currentJob) {
+            await currentJob.updateProgress(percentage, {
+              lastOutput: output.trim(),
+              stream: stream
+            })
+          }
         },
-        onBuildComplete: (error, result) => {
+        onBuildComplete: async (error, result) => {
           if (error) {
-            console.error('Build failed:', error.message)
-            // TODO: Emit error to websocket/SSE
+            // Mark job as failed
+            if (currentJob) {
+              await currentJob.fail(error.message)
+            }
           } else {
-            console.log('Build completed:', result.success)
-            // TODO: Emit success to websocket/SSE
+            // Mark job as completed
+            if (currentJob) {
+              await currentJob.complete({
+                success: result.success,
+                duration: result.duration || 'N/A'
+              })
+            }
           }
         }
       })
@@ -84,9 +112,14 @@ export default async ({ req, res, next, router }) => {
         repos.handle(req, res)
       })
 
-      router.post('/api/v1/git-build', jwtMiddleware(context), (req, res) => {
+      router.post('/api/v1/git-build', jwtMiddleware(context), async (req, res) => {
+        // Trigger build asynchronously
         repos.build().catch(err => console.error('Manual build failed:', err.message))
-        res.status(202).json({ success: true, message: 'Build started' })
+
+        res.status(202).json({
+          success: true,
+          message: 'Build started - check job queue for progress'
+        })
       })
 
       // Serve client assets (but not index.html - let SSR handle that)
