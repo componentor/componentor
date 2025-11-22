@@ -78,7 +78,7 @@ async function syncWorkdirToBare(workdirPath, barePath) {
   }
 }
 
-export default async ({ knex, table }) => {
+export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildComplete } = {}) => {
   const repoPath = join(__dirname, 'repos')
   const barePath = join(repoPath, 'bare.git')
   const workdirPath = join(__dirname, '..', 'workdir')
@@ -105,8 +105,81 @@ export default async ({ knex, table }) => {
       console.error('Error creating bare repository:', error.message)
     }
   }
-  
+
   let syncInProgress = false
+  let buildInProgress = false
+
+  const runBuild = () => {
+    if (buildInProgress) {
+      return Promise.reject(new Error('Build already in progress'))
+    }
+
+    buildInProgress = true
+    if (onBuildStart) onBuildStart()
+
+    return new Promise((resolve, reject) => {
+      const npmBuild = spawn('npm', ['run', 'build'], {
+        cwd: workdirPath,
+        shell: true
+      })
+
+      let stdout = ''
+      let stderr = ''
+      let progress = 0
+      const steps = {
+        'vite v': 10,
+        'building for production': 20,
+        'transforming': 40,
+        'rendering chunks': 60,
+        'computing gzip size': 80,
+        'built in': 100
+      }
+
+      const updateProgress = (output) => {
+        const lower = output.toLowerCase()
+        for (const [key, value] of Object.entries(steps)) {
+          if (lower.includes(key) && value > progress) {
+            progress = value
+            return progress
+          }
+        }
+        return progress
+      }
+
+      npmBuild.stdout.on('data', (data) => {
+        const output = data.toString()
+        stdout += output
+        const currentProgress = updateProgress(output)
+        if (onBuildProgress) onBuildProgress(output, 'stdout', currentProgress)
+      })
+
+      npmBuild.stderr.on('data', (data) => {
+        const output = data.toString()
+        stderr += output
+        const currentProgress = updateProgress(output)
+        if (onBuildProgress) onBuildProgress(output, 'stderr', currentProgress)
+      })
+
+      npmBuild.on('error', (error) => {
+        console.error('Build process error:', error.message)
+        buildInProgress = false
+        if (onBuildComplete) onBuildComplete(error, null)
+        reject(error)
+      })
+
+      npmBuild.on('close', (code) => {
+        buildInProgress = false
+        const result = { code, stdout, stderr, success: code === 0 }
+        if (onBuildComplete) onBuildComplete(null, result)
+
+        if (code === 0) {
+          resolve(result)
+        } else {
+          reject(new Error(`Build failed with code ${code}`))
+        }
+      })
+    })
+  }
 
   const repos = new Git(repoPath, {
     autoCreate: false,
@@ -218,6 +291,9 @@ export default async ({ knex, table }) => {
             }
           }, 1000)
         }
+
+        // Auto-build after push
+        runBuild().catch(err => console.error('Auto-build failed:', err.message))
       } catch (error) {
         console.error('Error updating workdir:', error.message)
       }
@@ -226,68 +302,7 @@ export default async ({ knex, table }) => {
 
   repos.on('fetch', (fetch) => fetch.accept())
 
-  repos.build = (onProgress, onComplete) => {
-    return new Promise((resolve, reject) => {
-      const npmBuild = spawn('npm', ['run', 'build'], {
-        cwd: workdirPath,
-        shell: true
-      })
-
-      let stdout = ''
-      let stderr = ''
-      let progress = 0
-      const steps = {
-        'vite v': 10,
-        'building for production': 20,
-        'transforming': 40,
-        'rendering chunks': 60,
-        'computing gzip size': 80,
-        'built in': 100
-      }
-
-      const updateProgress = (output) => {
-        const lower = output.toLowerCase()
-        for (const [key, value] of Object.entries(steps)) {
-          if (lower.includes(key) && value > progress) {
-            progress = value
-            return progress
-          }
-        }
-        return progress
-      }
-
-      npmBuild.stdout.on('data', (data) => {
-        const output = data.toString()
-        stdout += output
-        const currentProgress = updateProgress(output)
-        if (onProgress) onProgress(output, 'stdout', currentProgress)
-      })
-
-      npmBuild.stderr.on('data', (data) => {
-        const output = data.toString()
-        stderr += output
-        const currentProgress = updateProgress(output)
-        if (onProgress) onProgress(output, 'stderr', currentProgress)
-      })
-
-      npmBuild.on('error', (error) => {
-        console.error('Build process error:', error.message)
-        if (onComplete) onComplete(error, null)
-        reject(error)
-      })
-
-      npmBuild.on('close', (code) => {
-        const result = { code, stdout, stderr, success: code === 0 }
-        if (onComplete) onComplete(null, result)
-
-        if (code === 0) {
-          resolve(result)
-        } else {
-          reject(new Error(`Build failed with code ${code}`))
-        }
-      })
-    })
-  }
+  repos.build = runBuild
 
   return repos
 }

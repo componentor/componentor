@@ -7,7 +7,6 @@ import { transformHtmlTemplate } from '@unhead/vue/server'
 import { createContext } from '../../../hd-core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
 import { render } from './server/entry-server.js'
-import { execSync } from 'child_process'
 import jwtMiddleware from '../../../hd-core/middlewares/jwtMiddleware.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -58,24 +57,36 @@ export default async ({ req, res, next, router }) => {
     async render() {
 
       const { knex, table } = context
-      const repos = await git({ knex, table })
+
+      const repos = await git({
+        knex,
+        table,
+        onBuildStart: () => {
+          console.log('Build started')
+          // TODO: Emit to websocket/SSE
+        },
+        onBuildProgress: (output, stream, percentage) => {
+          console.log(`Build progress [${percentage}%]:`, output.trim())
+          // TODO: Emit to websocket/SSE
+        },
+        onBuildComplete: (error, result) => {
+          if (error) {
+            console.error('Build failed:', error.message)
+            // TODO: Emit error to websocket/SSE
+          } else {
+            console.log('Build completed:', result.success)
+            // TODO: Emit success to websocket/SSE
+          }
+        }
+      })
 
       router.use('/api/v1/git', (req, res) => {
         repos.handle(req, res)
       })
 
-      // @todo - Add security
       router.post('/api/v1/git-build', jwtMiddleware(context), (req, res) => {
-        try {
-          const output = execSync('npm run build', {
-            cwd: path.join(__dirname, 'repos', 'workdir'),
-            stdio: 'pipe'
-          }).toString()
-
-          res.json({ success: true, output })
-        } catch (e) {
-          res.status(500).json({ success: false, error: e.stdout?.toString() || e.message })
-        }
+        repos.build().catch(err => console.error('Manual build failed:', err.message))
+        res.status(202).json({ success: true, message: 'Build started' })
       })
 
       // Serve client assets (but not index.html - let SSR handle that)
