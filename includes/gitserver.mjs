@@ -46,8 +46,18 @@ async function syncWorkdirToBare(workdirPath, barePath) {
 
       console.log(`Current branch: ${currentBranch}`)
 
-      // Add all changes (both staged and unstaged, including deletions)
-      await git.add({ fs, dir: workdirPath, filepath: '.' })
+      // Stage all changes including deletions
+      for (const [filepath, headStatus, workdirStatus] of statusMatrix) {
+        if (headStatus !== workdirStatus) {
+          if (workdirStatus === 0) {
+            // File was deleted in working directory
+            await git.remove({ fs, dir: workdirPath, filepath })
+          } else {
+            // File was added or modified
+            await git.add({ fs, dir: workdirPath, filepath })
+          }
+        }
+      }
 
       // Commit the changes
       const commitOid = await git.commit({
