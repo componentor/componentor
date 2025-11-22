@@ -6,6 +6,7 @@ import crypto from 'crypto'
 import UserGuard from '../../../../hd-core/utils/UserGuard.mjs'
 import { fileURLToPath } from 'url'
 import git from 'isomorphic-git'
+import { spawn } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -224,6 +225,69 @@ export default async ({ knex, table }) => {
   })
 
   repos.on('fetch', (fetch) => fetch.accept())
+
+  repos.build = (onProgress, onComplete) => {
+    return new Promise((resolve, reject) => {
+      const npmBuild = spawn('npm', ['run', 'build'], {
+        cwd: workdirPath,
+        shell: true
+      })
+
+      let stdout = ''
+      let stderr = ''
+      let progress = 0
+      const steps = {
+        'vite v': 10,
+        'building for production': 20,
+        'transforming': 40,
+        'rendering chunks': 60,
+        'computing gzip size': 80,
+        'built in': 100
+      }
+
+      const updateProgress = (output) => {
+        const lower = output.toLowerCase()
+        for (const [key, value] of Object.entries(steps)) {
+          if (lower.includes(key) && value > progress) {
+            progress = value
+            return progress
+          }
+        }
+        return progress
+      }
+
+      npmBuild.stdout.on('data', (data) => {
+        const output = data.toString()
+        stdout += output
+        const currentProgress = updateProgress(output)
+        if (onProgress) onProgress(output, 'stdout', currentProgress)
+      })
+
+      npmBuild.stderr.on('data', (data) => {
+        const output = data.toString()
+        stderr += output
+        const currentProgress = updateProgress(output)
+        if (onProgress) onProgress(output, 'stderr', currentProgress)
+      })
+
+      npmBuild.on('error', (error) => {
+        console.error('Build process error:', error.message)
+        if (onComplete) onComplete(error, null)
+        reject(error)
+      })
+
+      npmBuild.on('close', (code) => {
+        const result = { code, stdout, stderr, success: code === 0 }
+        if (onComplete) onComplete(null, result)
+
+        if (code === 0) {
+          resolve(result)
+        } else {
+          reject(new Error(`Build failed with code ${code}`))
+        }
+      })
+    })
+  }
 
   return repos
 }
