@@ -10,19 +10,11 @@ import { spawn } from 'child_process'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const themeDir = resolve(__dirname, '..')
 
-// Try to import node-git-server from the theme's node_modules
-let Git
-try {
-  const nodeGitServerPath = join(themeDir, 'node_modules', 'node-git-server', 'dist', 'index.js')
-  const gitServerModule = await import(pathToFileURL(nodeGitServerPath).href)
-  // CommonJS module, so the exports are on .default for ESM import
-  Git = gitServerModule.default?.Git || gitServerModule.Git
-} catch (error) {
-  console.error('Failed to load node-git-server from theme node_modules:', error.message)
-  // Fallback to trying global import (will fail if not in parent node_modules)
-  const gitServerModule = await import('node-git-server')
-  Git = gitServerModule.default?.Git || gitServerModule.Git
-}
+// Import node-git-server from the theme's node_modules using relative path
+const nodeGitServerPath = join(themeDir, 'node_modules', 'node-git-server', 'dist', 'index.js')
+const gitServerModule = await import(pathToFileURL(nodeGitServerPath).href)
+// CommonJS module, so the exports are on .default for ESM import
+const Git = gitServerModule.default?.Git || gitServerModule.Git
 
 async function syncWorkdirToBare(workdirPath, barePath) {
   try {
