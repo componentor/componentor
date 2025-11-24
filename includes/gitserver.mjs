@@ -1,14 +1,19 @@
-import { Git } from 'node-git-server'
 import { join, dirname } from 'path'
 import fs from 'fs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import UserGuard from '../../../../hd-core/utils/UserGuard.mjs'
-import { fileURLToPath } from 'url'
+import { fileURLToPath, pathToFileURL } from 'url'
 import git from 'isomorphic-git'
 import { spawn } from 'child_process'
+import { createRequire } from 'module'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
+
+// Resolve node-git-server from the theme's node_modules
+const nodeGitServerPath = require.resolve('node-git-server')
+const { Git } = await import(pathToFileURL(nodeGitServerPath).href)
 
 async function syncWorkdirToBare(workdirPath, barePath) {
   try {
