@@ -1,4 +1,4 @@
-import { join, dirname } from 'path'
+import { join, dirname, resolve } from 'path'
 import fs from 'fs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
@@ -6,14 +6,23 @@ import UserGuard from '../../../../hd-core/utils/UserGuard.mjs'
 import { fileURLToPath, pathToFileURL } from 'url'
 import git from 'isomorphic-git'
 import { spawn } from 'child_process'
-import { createRequire } from 'module'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const require = createRequire(import.meta.url)
+const themeDir = resolve(__dirname, '..')
 
-// Resolve node-git-server from the theme's node_modules
-const nodeGitServerPath = require.resolve('node-git-server')
-const { Git } = await import(pathToFileURL(nodeGitServerPath).href)
+// Try to import node-git-server from the theme's node_modules
+let Git
+try {
+  const nodeGitServerPath = join(themeDir, 'node_modules', 'node-git-server', 'dist', 'index.js')
+  const gitServerModule = await import(pathToFileURL(nodeGitServerPath).href)
+  // CommonJS module, so the exports are on .default for ESM import
+  Git = gitServerModule.default?.Git || gitServerModule.Git
+} catch (error) {
+  console.error('Failed to load node-git-server from theme node_modules:', error.message)
+  // Fallback to trying global import (will fail if not in parent node_modules)
+  const gitServerModule = await import('node-git-server')
+  Git = gitServerModule.default?.Git || gitServerModule.Git
+}
 
 async function syncWorkdirToBare(workdirPath, barePath) {
   try {
