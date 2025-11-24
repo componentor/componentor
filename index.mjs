@@ -6,13 +6,26 @@ import express from 'express'
 import { transformHtmlTemplate } from '@unhead/vue/server'
 import { createContext } from '../../../hd-core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
-import { render } from './server/entry-server.js'
 import jwtMiddleware from '../../../hd-core/middlewares/jwtMiddleware.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, 'client')
 const clientTemplate = path.join(__dirname, 'client', 'index.html')
-const template = fs.readFileSync(clientTemplate, 'utf-8')
+const serverEntry = path.join(__dirname, 'server', 'entry-server.js')
+
+// Dynamically load render function (only available after first build)
+let render = null
+async function loadRender() {
+  if (render) return render
+  if (!fs.existsSync(serverEntry)) return null
+  const module = await import('./server/entry-server.js')
+  render = module.render
+  return render
+}
+
+const template = fs.existsSync(clientTemplate)
+  ? fs.readFileSync(clientTemplate, 'utf-8')
+  : '<!DOCTYPE html><html><head></head><body><!--app-html--></body></html>'
 
 /**
  * @param {HTMLDrop.ThemeRequest} params
@@ -123,17 +136,20 @@ export default async ({ req, res, next, router }) => {
       })
 
       // Serve client assets (but not index.html - let SSR handle that)
-      router.use(express.static(clientDist, { index: false }))
+      if (fs.existsSync(clientDist)) {
+        router.use(express.static(clientDist, { index: false }))
+      }
 
-      router.get(/.*/, async (req, res, next) => {
+      router.get(/.*/, async (req, res) => {
         // Load prebuilt SSR server entry
+        const renderFn = await loadRender()
 
-        if (typeof render !== 'function') {
-          throw new Error('SSR template server entry must export a render(url) function')
+        if (typeof renderFn !== 'function') {
+          return res.status(503).send('Theme not built yet. Please trigger a build first.')
         }
 
         // Mount SSR handler
-        const rendered = await render(req.url)
+        const rendered = await renderFn(req.url)
 
         let html = ''
         if (rendered.head) {
