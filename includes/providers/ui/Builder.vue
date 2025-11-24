@@ -3,7 +3,7 @@
     <iframe
       sandbox="allow-scripts allow-same-origin allow-popups allow-modals"
       id="vueplay"
-      :src="'http://localhost:3000/p#?root=root&repository=' + base + '/api/v1/git/bare.git&token=' + tokens?.accessToken"
+      :src="'https://studio.vueplay.com/p#?root=root&repository=' + base + '/api/v1/git/bare.git&token=' + tokens?.accessToken"
     />
   </div>
 </template>

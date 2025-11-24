@@ -1,13 +1,17 @@
 {
-  "name": "@htmldrop/coralpen",
+  "name": "@componentor/componentor",
   "version": "1.0.0",
-  "description": "",
+  "description": "Drag & Drop Vue Website Builder",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "steffanhalv@gmail.com",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["hd-theme", "htmldrop", "website", "builder", "vue", "vueplay"],
   "type": "module",
   "dependencies": {
     "@unhead/vue": "^2.0.18",
