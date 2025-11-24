@@ -1,6 +1,5 @@
 import path from 'path'
 import fs from 'fs'
-import git from './includes/gitserver.mjs'
 import { fileURLToPath } from 'url'
 import express from 'express'
 import { transformHtmlTemplate } from '@unhead/vue/server'
@@ -71,6 +70,10 @@ export default async ({ req, res, next, router }) => {
 
       const { knex, table } = context
       let currentJob = null
+
+      // Dynamic import with cache-busting for gitserver
+      const gitserverModule = await import(`./includes/gitserver.mjs?t=${Date.now()}`)
+      const git = gitserverModule.default
 
       const repos = await git({
         knex,
