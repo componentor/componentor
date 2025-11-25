@@ -3,9 +3,9 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import express from 'express'
 import { transformHtmlTemplate } from '@unhead/vue/server'
-import { createContext } from '../../../hd-core/types/context.mjs'
+import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
-import jwtMiddleware from '../../../hd-core/middlewares/jwtMiddleware.mjs'
+import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, 'client')
