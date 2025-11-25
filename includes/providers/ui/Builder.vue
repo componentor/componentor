@@ -1,7 +1,7 @@
 <template>
   <div style="display: flex; flex-direction: column; flex-grow: 1;">
     <iframe
-      sandbox="allow-scripts allow-same-origin allow-popups allow-modals"
+      sandbox="allow-downloads allow-scripts allow-same-origin allow-popups allow-modals"
       id="vueplay"
       :src="origin + '/p#?root=root&repository=' + base + '/api/v1/git/bare.git&token=' + tokens?.accessToken"
     />
