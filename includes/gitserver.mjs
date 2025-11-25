@@ -174,14 +174,19 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
         return Math.min(installProgress, 10)
       }
 
+      let installStdout = ''
+      let installStderr = ''
+
       npmInstall.stdout.on('data', (data) => {
         const output = data.toString()
+        installStdout += output
         const currentProgress = updateInstallProgress(output)
         if (onBuildProgress) onBuildProgress(output, 'stdout', currentProgress)
       })
 
       npmInstall.stderr.on('data', (data) => {
         const output = data.toString()
+        installStderr += output
         const currentProgress = updateInstallProgress(output)
         if (onBuildProgress) onBuildProgress(output, 'stderr', currentProgress)
       })
@@ -196,7 +201,8 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
       npmInstall.on('close', (installCode) => {
         if (installCode !== 0) {
           buildInProgress = false
-          const error = new Error(`npm install failed with code ${installCode}`)
+          console.error('npm install failed:', installStderr || installStdout)
+          const error = new Error(`npm install failed with code ${installCode}: ${installStderr.slice(-500) || installStdout.slice(-500)}`)
           if (onBuildComplete) onBuildComplete(error, null)
           return reject(error)
         }
