@@ -218,7 +218,11 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
         // Now run the build
         const npmBuild = spawn('npm', ['run', 'build'], {
           cwd: workdirPath,
-          shell: true
+          shell: true,
+          env: {
+            ...process.env,
+            PATH: `${join(workdirPath, 'node_modules', '.bin')}:${process.env.PATH}`
+          }
         })
 
         let stdout = ''
@@ -267,6 +271,9 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
 
         npmBuild.on('close', (code) => {
           buildInProgress = false
+          if (code !== 0) {
+            console.error('Build failed:', stderr || stdout)
+          }
           const result = { code, stdout, stderr, success: code === 0 }
           if (onBuildComplete) onBuildComplete(null, result)
 
