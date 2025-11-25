@@ -3,7 +3,7 @@
     <iframe
       sandbox="allow-scripts allow-same-origin allow-popups allow-modals"
       id="vueplay"
-      :src="'https://studio.vueplay.com/p#?root=root&repository=' + base + '/api/v1/git/bare.git&token=' + tokens?.accessToken"
+      :src="origin + '/p#?root=root&repository=' + base + '/api/v1/git/bare.git&token=' + tokens?.accessToken"
     />
   </div>
 </template>
@@ -11,10 +11,10 @@
 export default {
   inject: ['apiFetch', 'apiBase', 'navTree', 'tokens'],
   props: ['sub', 'slug'],
-  data: () => ({
-    message: 'yes take your hands up, in the air!'
-  }),
   computed: {
+    origin() {
+      return location.origin.includes('http://localhost:') ? 'http://localhost:3000' : 'https://studio.vueplay.com'
+    },
     base() {
       if (this.apiBase?.startsWith('http')) return this.apiBase
       return location.origin + this.apiBase
