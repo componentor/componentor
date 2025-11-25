@@ -1,6 +1,10 @@
 # Componentor
 
-A drag & drop Website Builder for HTMLDrop based on Website Builder from https://vueplay.com.
+A drag & drop Website Builder theme for [HTMLDrop](https://github.com/htmldrop/htmldrop), based on Website Builder from https://vueplay.com.
+
+## About HTMLDrop
+
+HTMLDrop is a modern, open-source Node.js CMS built for developers. Componentor is designed as an HTMLDrop theme (`hd-theme`) that provides a visual website builder experience within the HTMLDrop ecosystem.
 
 ## Installation
 
