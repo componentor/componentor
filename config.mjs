@@ -9,7 +9,7 @@ export default {
   persistent_directories: [
     'workdir',           // Git working directory with user's design work
     'node_modules',      // Installed npm dependencies (including node-git-server)
-    'includes/repos',     // Git repositories (bare.git and related files)
+    'includes/repos',    // Git repositories (bare.git and related files)
     'client',
     'server'
   ],

@@ -4,3 +4,4 @@ server
 includes/repos
 .DS_Store
 .claude
+workdir/.git

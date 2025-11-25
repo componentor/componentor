@@ -91,6 +91,24 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
 
   try { fs.mkdirSync(repoPath, { recursive: true }) } catch(e) {}
 
+  // Initialize workdir as git repo if it exists but isn't a git repo yet
+  if (fs.existsSync(workdirPath) && !fs.existsSync(join(workdirPath, '.git'))) {
+    try {
+      await git.init({ fs, dir: workdirPath, defaultBranch: 'master' })
+      // Stage and commit all existing files
+      await git.add({ fs, dir: workdirPath, filepath: '.' })
+      await git.commit({
+        fs,
+        dir: workdirPath,
+        message: 'Initial commit',
+        author: { name: 'GitServer', email: 'auto@gitserver.local' }
+      })
+      console.log('Initialized git repository in workdir')
+    } catch (error) {
+      console.error('Error initializing workdir git repo:', error.message)
+    }
+  }
+
   if (!fs.existsSync(barePath) && fs.existsSync(join(workdirPath, '.git'))) {
     try {
       await git.init({ fs, dir: barePath, bare: true, defaultBranch: 'master' })
