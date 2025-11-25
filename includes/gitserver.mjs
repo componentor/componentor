@@ -215,14 +215,10 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
           return reject(error)
         }
 
-        // Now run the build
-        const npmBuild = spawn('npm', ['run', 'build'], {
-          cwd: workdirPath,
-          shell: true,
-          env: {
-            ...process.env,
-            PATH: `${join(workdirPath, 'node_modules', '.bin')}:${process.env.PATH}`
-          }
+        // Now run the build (client + server) using npx to ensure vite is found
+        const buildCmd = 'npx vite build --outDir ../client && npx vite build --ssr src/entry-server.js --outDir ../server'
+        const npmBuild = spawn('sh', ['-c', buildCmd], {
+          cwd: workdirPath
         })
 
         let stdout = ''
