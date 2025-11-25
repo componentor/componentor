@@ -141,6 +141,14 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
     buildInProgress = true
     if (onBuildStart) onBuildStart()
 
+    // Ensure .npmrc exists for @vueplayio registry
+    const npmrcPath = join(workdirPath, '.npmrc')
+    if (!fs.existsSync(npmrcPath)) {
+      fs.writeFileSync(npmrcPath, `@vueplayio:registry=https://manager.vueplay.io/
+#//manager.vueplay.io/:_authToken=replace_with_token
+`)
+    }
+
     return new Promise((resolve, reject) => {
       // Run npm install first, then npm run build
       const npmInstall = spawn('npm', ['install'], {
