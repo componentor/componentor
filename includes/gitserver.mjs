@@ -142,65 +142,126 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
     if (onBuildStart) onBuildStart()
 
     return new Promise((resolve, reject) => {
-      const npmBuild = spawn('npm', ['run', 'build'], {
+      // Run npm install first, then npm run build
+      const npmInstall = spawn('npm', ['install'], {
         cwd: workdirPath,
         shell: true
       })
 
-      let stdout = ''
-      let stderr = ''
-      let progress = 0
-      const steps = {
-        'vite v': 10,
-        'building for production': 20,
-        'transforming': 40,
-        'rendering chunks': 60,
-        'computing gzip size': 80,
-        'built in': 100
+      // Progress tracking for npm install (0-10%)
+      let installProgress = 0
+      const installSteps = {
+        'reify:': 2,
+        'http fetch': 3,
+        'added': 7,
+        'packages': 8,
+        'up to date': 10,
+        'audited': 10
       }
 
-      const updateProgress = (output) => {
+      const updateInstallProgress = (output) => {
         const lower = output.toLowerCase()
-        for (const [key, value] of Object.entries(steps)) {
-          if (lower.includes(key) && value > progress) {
-            progress = value
-            return progress
+        for (const [key, value] of Object.entries(installSteps)) {
+          if (lower.includes(key) && value > installProgress) {
+            installProgress = value
+            return installProgress
           }
         }
-        return progress
+        // Gradually increase progress on any output if still low
+        if (installProgress < 6) {
+          installProgress += 0.5
+        }
+        return Math.min(installProgress, 10)
       }
 
-      npmBuild.stdout.on('data', (data) => {
+      npmInstall.stdout.on('data', (data) => {
         const output = data.toString()
-        stdout += output
-        const currentProgress = updateProgress(output)
+        const currentProgress = updateInstallProgress(output)
         if (onBuildProgress) onBuildProgress(output, 'stdout', currentProgress)
       })
 
-      npmBuild.stderr.on('data', (data) => {
+      npmInstall.stderr.on('data', (data) => {
         const output = data.toString()
-        stderr += output
-        const currentProgress = updateProgress(output)
+        const currentProgress = updateInstallProgress(output)
         if (onBuildProgress) onBuildProgress(output, 'stderr', currentProgress)
       })
 
-      npmBuild.on('error', (error) => {
-        console.error('Build process error:', error.message)
+      npmInstall.on('error', (error) => {
+        console.error('npm install error:', error.message)
         buildInProgress = false
         if (onBuildComplete) onBuildComplete(error, null)
         reject(error)
       })
 
-      npmBuild.on('close', (code) => {
-        buildInProgress = false
-        const result = { code, stdout, stderr, success: code === 0 }
-        if (onBuildComplete) onBuildComplete(null, result)
-
-        if (code === 0) {
-          resolve(result)
-        } else {
-          reject(new Error(`Build failed with code ${code}`))
+      npmInstall.on('close', (installCode) => {
+        if (installCode !== 0) {
+          buildInProgress = false
+          const error = new Error(`npm install failed with code ${installCode}`)
+          if (onBuildComplete) onBuildComplete(error, null)
+          return reject(error)
         }
+
+        // Now run the build
+        const npmBuild = spawn('npm', ['run', 'build'], {
+          cwd: workdirPath,
+          shell: true
+        })
+
+        let stdout = ''
+        let stderr = ''
+        let progress = 0
+        const steps = {
+          'vite v': 10,
+          'building for production': 20,
+          'transforming': 40,
+          'rendering chunks': 60,
+          'computing gzip size': 80,
+          'built in': 100
+        }
+
+        const updateProgress = (output) => {
+          const lower = output.toLowerCase()
+          for (const [key, value] of Object.entries(steps)) {
+            if (lower.includes(key) && value > progress) {
+              progress = value
+              return progress
+            }
+          }
+          return progress
+        }
+
+        npmBuild.stdout.on('data', (data) => {
+          const output = data.toString()
+          stdout += output
+          const currentProgress = updateProgress(output)
+          if (onBuildProgress) onBuildProgress(output, 'stdout', currentProgress)
+        })
+
+        npmBuild.stderr.on('data', (data) => {
+          const output = data.toString()
+          stderr += output
+          const currentProgress = updateProgress(output)
+          if (onBuildProgress) onBuildProgress(output, 'stderr', currentProgress)
+        })
+
+        npmBuild.on('error', (error) => {
+          console.error('Build process error:', error.message)
+          buildInProgress = false
+          if (onBuildComplete) onBuildComplete(error, null)
+          reject(error)
+        })
+
+        npmBuild.on('close', (code) => {
+          buildInProgress = false
+          const result = { code, stdout, stderr, success: code === 0 }
+          if (onBuildComplete) onBuildComplete(null, result)
+
+          if (code === 0) {
+            resolve(result)
+          } else {
+            reject(new Error(`Build failed with code ${code}`))
+          }
+        })
       })
     })
   }
