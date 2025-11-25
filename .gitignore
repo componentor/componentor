@@ -2,3 +2,5 @@ node_modules
 client
 server
 includes/repos
+.DS_Store
+.claude
