@@ -150,8 +150,8 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
     }
 
     return new Promise((resolve, reject) => {
-      // Run npm install first, then npm run build
-      const npmInstall = spawn('npm', ['install'], {
+      // Run npm install first (include dev deps for vite), then npm run build
+      const npmInstall = spawn('npm', ['install', '--include=dev'], {
         cwd: workdirPath,
         shell: true
       })
@@ -215,11 +215,10 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
           return reject(error)
         }
 
-        // Now run the build (client + server) using node to run vite directly
-        const viteEntry = join(workdirPath, 'node_modules', 'vite', 'bin', 'vite.js')
-        const buildCmd = `node "${viteEntry}" build --outDir ../client && node "${viteEntry}" build --ssr src/entry-server.js --outDir ../server`
-        const npmBuild = spawn('sh', ['-c', buildCmd], {
-          cwd: workdirPath
+        // Now run the build
+        const npmBuild = spawn('npm', ['run', 'build'], {
+          cwd: workdirPath,
+          shell: true
         })
 
         let stdout = ''
