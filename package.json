@@ -1,6 +1,6 @@
 {
   "name": "@componentor/componentor",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "Drag & Drop Vue Website Builder",
   "main": "index.js",
   "scripts": {
@@ -15,12 +15,21 @@
     "type": "git",
     "url": "https://github.com/componentor/componentor.git"
   },
-  "keywords": ["hd-theme", "htmldrop", "website", "builder", "vue", "vueplay"],
+  "keywords": [
+    "hd-theme",
+    "htmldrop",
+    "website",
+    "builder",
+    "vue",
+    "vueplay"
+  ],
   "type": "module",
   "dependencies": {
     "@unhead/vue": "^2.0.18",
+    "cookie": "^1.1.0",
     "isomorphic-git": "^1.35.0",
     "jsonwebtoken": "^9.0.2",
-    "node-git-server": "^1.0.0"
+    "node-git-server": "^1.0.0",
+    "ua-parser-js": "^2.0.6"
   }
 }

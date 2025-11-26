@@ -7,6 +7,8 @@ import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
 import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.mjs'
 import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.mjs'
+import UAParser from 'ua-parser-js'
+import cookie from 'cookie'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, 'client')
@@ -32,7 +34,7 @@ let cachedGitServer = null
 let gitServerInitPromise = null
 
 // SSR cache TTL (uses SharedSSRCache for cross-worker caching)
-const SSR_CACHE_TTL_MS = 5000 // 5 seconds - shared across all workers
+const SSR_CACHE_TTL_MS = 60000 * 1 // 1 min - shared across all workers
 
 /**
  * @param {HTMLDrop.ThemeRequest} params
@@ -181,7 +183,9 @@ export default async ({ req, res, next, router }) => {
 
       router.get(/.*/, async (req, res) => {
         // Check shared SSR cache first (cross-worker)
-        const cacheKey = req.url
+        // Cache key includes user ID for authenticated users
+        const userId = req.user?.id || 'anonymous'
+        const cacheKey = `${userId}:${req.url}`
         const cached = await getCachedSSR(cacheKey, SSR_CACHE_TTL_MS)
 
         if (cached) {
@@ -209,6 +213,38 @@ export default async ({ req, res, next, router }) => {
           ssrSpan.addTag('error', 'not_built')
           ssrSpan.end()
           return res.status(503).send('Theme not built yet. Please trigger a build first.')
+        }
+
+        const parser = new UAParser(req.headers['user-agent'])
+        const deviceType = parser.getDevice().type
+
+        let guessedWidth = 1280
+        if (deviceType === 'mobile') guessedWidth = 375
+        else if (deviceType === 'tablet') guessedWidth = 768
+
+        const cookies = cookie.parse(req.headers.cookie || '')
+        const accessToken = cookies.accessToken
+        const theme = cookies.theme
+        const windowWidth = cookies.windowWidth || guessedWidth
+
+        const originalFetch = fetch
+
+        global.theme = theme
+        global.accessToken = accessToken
+        global.windowWidth = windowWidth || 1280
+        global.fetch = async (uri, options = {}) => {
+          /*
+          @todo - Could create nonce logic give access to e.g. internal apis
+          if (uri.startsWith('')) {
+            options = {
+              ...options,
+              headers: {
+                ...options.headers,
+                'x-ssr-nonce': nonce,
+              }
+            }
+          }*/
+          return originalFetch(uri, options)
         }
 
         // Trace Vue SSR rendering
