@@ -20,7 +20,7 @@ export default {
     // Example: 'custom-settings.json'
   ],
   skip_registry_paths: [
-    '/api/v1/git/*',    // Wildcard - matches /api/v1/git/anything
+    '/api/v1/git/*',
     '/api/v1/git-build'
   ]
 }

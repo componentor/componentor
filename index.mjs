@@ -46,6 +46,8 @@ export default async ({ req, res, next, router }) => {
   // Theme developers can use this to trace their own operations
   const { tracer, startSpan, trace } = hooks
 
+  let inited = false
+
   return {
     async init() {
       const { addAction, getAttachmentUrl } = hooks
@@ -117,7 +119,7 @@ export default async ({ req, res, next, router }) => {
                   createdBy: req.user?.id || null,
                   showNotification: true
                 })
-                await currentJob.start()
+                if (currentJob) await currentJob.start()
               },
               onBuildProgress: async (output, stream, percentage) => {
                 if (currentJob) {
@@ -145,12 +147,19 @@ export default async ({ req, res, next, router }) => {
           })()
         }
       }, { category: 'theme' })
+      inited = true
     },
     async render() {
+
+      // Routes are escaped from registry, so init() wont run ~ hence, needs to run manually
+      if (req.path.startsWith('/api/v1/git') && !inited) {
+        await this.init()
+      }
+
       // Wait for gitserver if still initializing
       const repos = cachedGitServer || await gitServerInitPromise
 
-      // Register git API routes (idempotent - Express handles duplicates)
+      // Register git routes
       if (repos) {
         router.use('/api/v1/git', (req, res) => {
           repos.handle(req, res)
