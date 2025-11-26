@@ -18,5 +18,9 @@ export default {
   persistent_files: [
     // Add any custom configuration files here
     // Example: 'custom-settings.json'
+  ],
+  skip_registry_paths: [
+    '/api/v1/git/*',    // Wildcard - matches /api/v1/git/anything
+    '/api/v1/git-build'
   ]
 }

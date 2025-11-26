@@ -152,7 +152,7 @@ export default async ({ req, res, next, router }) => {
 
       // Register git API routes (idempotent - Express handles duplicates)
       if (repos) {
-        router.use('/git', (req, res) => {
+        router.use('/api/v1/git', (req, res) => {
           repos.handle(req, res)
         })
 
