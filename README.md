@@ -1,4 +1,4 @@
-# Componentor
+# Componentor Website Builder
 
 A drag & drop Website Builder theme for [HTMLDrop](https://github.com/htmldrop/htmldrop), based on Website Builder from https://vueplay.com.
 
