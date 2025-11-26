@@ -7,7 +7,7 @@ import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
 import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.mjs'
 import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.mjs'
-import UAParser from 'ua-parser-js'
+import { UAParser } from 'ua-parser-js'
 import cookie from 'cookie'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -246,6 +246,12 @@ export default async ({ req, res, next, router }) => {
           }*/
           return originalFetch(uri, options)
         }
+
+        console.log({
+          theme,
+          accessToken,
+          windowWidth: windowWidth || 1280
+        })
 
         // Trace Vue SSR rendering
         const vueRenderSpan = startSpan('theme.componentor.vueRender', { category: 'render' })
