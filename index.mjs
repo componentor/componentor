@@ -225,7 +225,10 @@ export default async ({ req, res, next, router }) => {
         const cookies = cookie.parse(req.headers.cookie || '')
         const accessToken = cookies.accessToken
         const theme = cookies.theme
-        const windowWidth = cookies.windowWidth || guessedWidth
+        let windowWidth = guessedWidth
+        try {
+          windowWidth = Number(cookies?.windowWidth || 0) || guessedWidth
+        } catch(e) {}
 
         const originalFetch = fetch
 
