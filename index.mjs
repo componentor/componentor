@@ -14,6 +14,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, 'client')
 const clientTemplate = path.join(__dirname, 'client', 'index.html')
 const serverEntry = path.join(__dirname, 'server', 'entry-server.js')
+const workdirPath = path.join(__dirname, 'workdir')
+const workdirGitignore = path.join(workdirPath, '.gitignore')
+
+// Create .gitignore in workdir if it doesn't exist (npm strips it during publish)
+if (!fs.existsSync(workdirGitignore)) {
+  fs.writeFileSync(workdirGitignore, 'node_modules\n', 'utf-8')
+}
 
 // Dynamically load render function (only available after first build)
 let render = null
