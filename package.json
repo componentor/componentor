@@ -1,6 +1,6 @@
 {
   "name": "@componentor/componentor",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "Drag & Drop Vue Website Builder",
   "main": "index.js",
   "scripts": {
@@ -10,6 +10,10 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/componentor/componentor.git"
   },
   "keywords": ["hd-theme", "htmldrop", "website", "builder", "vue", "vueplay"],
   "type": "module",
