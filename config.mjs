@@ -22,5 +22,9 @@ export default {
   skip_registry_paths: [
     '/api/v1/git/*',
     '/api/v1/git-build'
+  ],
+  watch_ignore: [
+    '/workdir',
+    '/includes/repos'
   ]
 }
