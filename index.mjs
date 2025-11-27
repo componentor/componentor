@@ -9,7 +9,6 @@ import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.mjs'
 import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.mjs'
 import { UAParser } from 'ua-parser-js'
 import cookie from 'cookie'
-import chokidar from 'chokidar'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, 'client')
@@ -25,34 +24,13 @@ if (!fs.existsSync(workdirGitignore)) {
 
 // Dynamically load render function (only available after first build)
 let render = null
-let renderWatcher = null
 
 async function loadRender() {
   if (render) return render
   if (!fs.existsSync(serverEntry)) return null
 
-  // Import with cache-busting timestamp
-  const timestamp = Date.now()
-  const module = await import(`./server/entry-server.js?t=${timestamp}`)
+  const module = await import('./server/entry-server.js')
   render = module.render
-
-  // Set up file watcher to invalidate cache when entry-server.js changes
-  if (!renderWatcher && fs.existsSync(serverEntry)) {
-    renderWatcher = chokidar.watch(serverEntry, {
-      persistent: true,
-      ignoreInitial: true
-    })
-
-    renderWatcher.on('change', () => {
-      console.log('entry-server.js changed, invalidating render cache')
-      render = null
-    })
-
-    renderWatcher.on('unlink', () => {
-      console.log('entry-server.js removed, invalidating render cache')
-      render = null
-    })
-  }
 
   return render
 }
@@ -151,7 +129,8 @@ export default async ({ req, res, next, router }) => {
                   </svg>`,
                   source: 'hello-coral-theme',
                   createdBy: req.user?.id || null,
-                  showNotification: true
+                  showNotification: true,
+                  timeout: 300000 // 5 minutes timeout
                 })
                 if (currentJob) await currentJob.start()
               },
