@@ -331,6 +331,7 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
   })
 
   repos.on('push', async (push) => {
+    const preventBuild = push.req.headers?.accept === 'init'
     push.accept()
 
     push.once('exit', async () => {
@@ -395,7 +396,9 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
         }
 
         // Auto-build after push
-        runBuild().catch(err => console.error('Auto-build failed:', err.message))
+        if (!preventBuild) {
+          runBuild().catch(err => console.error('Auto-build failed:', err.message))
+        }
       } catch (error) {
         console.error('Error updating workdir:', error.message)
       }
