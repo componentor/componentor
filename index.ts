@@ -5,7 +5,7 @@ import express from 'express'
 import { transformHtmlTemplate } from '@unhead/vue/server'
 import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
-import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.mjs'
+import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.ts'
 import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.mjs'
 import { UAParser } from 'ua-parser-js'
 import cookie from 'cookie'
@@ -158,7 +158,7 @@ export default async ({ req, res, next, router }) => {
             })
 
             // Import gitserver module once (no cache-busting)
-            const gitserverModule = await import('./includes/gitserver.mjs')
+            const gitserverModule = await import('./includes/gitserver.ts')
             const git = gitserverModule.default
 
             let currentJob = null
