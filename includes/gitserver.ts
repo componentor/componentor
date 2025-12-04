@@ -133,13 +133,13 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
   let syncInProgress = false
   let buildInProgress = false
 
-  const runBuild = () => {
+  const runBuild = (isRetry = false) => {
     if (buildInProgress) {
       return Promise.reject(new Error('Build already in progress'))
     }
 
     buildInProgress = true
-    if (onBuildStart) onBuildStart()
+    if (!isRetry && onBuildStart) onBuildStart()
 
     // Ensure .npmrc exists for @vueplayio registry
     const npmrcPath = join(workdirPath, '.npmrc')
@@ -149,73 +149,92 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
 `)
     }
 
-    return new Promise((resolve, reject) => {
-      // Run npm install first (include dev deps for vite), then npm run build
-      const npmInstall = spawn('npm', ['install', '--include=dev'], {
-        cwd: workdirPath,
-        shell: true
+    // Helper to delete node_modules
+    const deleteNodeModules = () => {
+      return new Promise<void>((resolve) => {
+        const nodeModulesPath = join(workdirPath, 'node_modules')
+        if (fs.existsSync(nodeModulesPath)) {
+          console.log('[Build] Deleting node_modules for clean reinstall...')
+          if (onBuildProgress) onBuildProgress('Deleting node_modules for clean reinstall...', 'stdout', 0)
+          fs.rm(nodeModulesPath, { recursive: true, force: true }, (err) => {
+            if (err) console.error('Failed to delete node_modules:', err.message)
+            resolve()
+          })
+        } else {
+          resolve()
+        }
       })
+    }
 
-      // Progress tracking for npm install (0-10%)
-      let installProgress = 0
-      const installSteps = {
-        'reify:': 2,
-        'http fetch': 3,
-        'added': 7,
-        'packages': 8,
-        'up to date': 10,
-        'audited': 10
-      }
+    // Helper to run npm install
+    const runNpmInstall = (): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const npmInstall = spawn('npm', ['install', '--include=dev'], {
+          cwd: workdirPath,
+          shell: true
+        })
 
-      const updateInstallProgress = (output) => {
-        const lower = output.toLowerCase()
-        for (const [key, value] of Object.entries(installSteps)) {
-          if (lower.includes(key) && value > installProgress) {
-            installProgress = value
-            return installProgress
+        // Progress tracking for npm install (0-10%)
+        let installProgress = 0
+        const installSteps = {
+          'reify:': 2,
+          'http fetch': 3,
+          'added': 7,
+          'packages': 8,
+          'up to date': 10,
+          'audited': 10
+        }
+
+        const updateInstallProgress = (output) => {
+          const lower = output.toLowerCase()
+          for (const [key, value] of Object.entries(installSteps)) {
+            if (lower.includes(key) && value > installProgress) {
+              installProgress = value
+              return installProgress
+            }
           }
-        }
-        // Gradually increase progress on any output if still low
-        if (installProgress < 6) {
-          installProgress += 0.5
-        }
-        return Math.min(installProgress, 10)
-      }
-
-      let installStdout = ''
-      let installStderr = ''
-
-      npmInstall.stdout.on('data', (data) => {
-        const output = data.toString()
-        installStdout += output
-        const currentProgress = updateInstallProgress(output)
-        if (onBuildProgress) onBuildProgress(output, 'stdout', currentProgress)
-      })
-
-      npmInstall.stderr.on('data', (data) => {
-        const output = data.toString()
-        installStderr += output
-        const currentProgress = updateInstallProgress(output)
-        if (onBuildProgress) onBuildProgress(output, 'stderr', currentProgress)
-      })
-
-      npmInstall.on('error', (error) => {
-        console.error('npm install error:', error.message)
-        buildInProgress = false
-        if (onBuildComplete) onBuildComplete(error, null)
-        reject(error)
-      })
-
-      npmInstall.on('close', (installCode) => {
-        if (installCode !== 0) {
-          buildInProgress = false
-          console.error('npm install failed:', installStderr || installStdout)
-          const error = new Error(`npm install failed with code ${installCode}: ${installStderr.slice(-500) || installStdout.slice(-500)}`)
-          if (onBuildComplete) onBuildComplete(error, null)
-          return reject(error)
+          if (installProgress < 6) {
+            installProgress += 0.5
+          }
+          return Math.min(installProgress, 10)
         }
 
-        // Now run the build
+        let installStdout = ''
+        let installStderr = ''
+
+        npmInstall.stdout.on('data', (data) => {
+          const output = data.toString()
+          installStdout += output
+          const currentProgress = updateInstallProgress(output)
+          if (onBuildProgress) onBuildProgress(output, 'stdout', currentProgress)
+        })
+
+        npmInstall.stderr.on('data', (data) => {
+          const output = data.toString()
+          installStderr += output
+          const currentProgress = updateInstallProgress(output)
+          if (onBuildProgress) onBuildProgress(output, 'stderr', currentProgress)
+        })
+
+        npmInstall.on('error', (error) => {
+          console.error('npm install error:', error.message)
+          reject(error)
+        })
+
+        npmInstall.on('close', (installCode) => {
+          if (installCode !== 0) {
+            console.error('npm install failed:', installStderr || installStdout)
+            reject(new Error(`npm install failed with code ${installCode}: ${installStderr.slice(-500) || installStdout.slice(-500)}`))
+          } else {
+            resolve()
+          }
+        })
+      })
+    }
+
+    // Helper to run npm build
+    const runNpmBuild = (): Promise<{ code: number; stdout: string; stderr: string; success: boolean }> => {
+      return new Promise((resolve, reject) => {
         const npmBuild = spawn('npm', ['run', 'build'], {
           cwd: workdirPath,
           shell: true
@@ -260,27 +279,58 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
 
         npmBuild.on('error', (error) => {
           console.error('Build process error:', error.message)
-          buildInProgress = false
-          if (onBuildComplete) onBuildComplete(error, null)
           reject(error)
         })
 
         npmBuild.on('close', (code) => {
-          buildInProgress = false
-          if (code !== 0) {
-            console.error('Build failed:', stderr || stdout)
-          }
           const result = { code, stdout, stderr, success: code === 0 }
-          if (onBuildComplete) onBuildComplete(null, result)
-
           if (code === 0) {
             resolve(result)
           } else {
-            reject(new Error(`Build failed with code ${code}`))
+            console.error('Build failed:', stderr || stdout)
+            reject(Object.assign(new Error(`Build failed with code ${code}`), { result }))
           }
         })
       })
-    })
+    }
+
+    // Main build flow with retry logic
+    return (async () => {
+      try {
+        await runNpmInstall()
+        const result = await runNpmBuild()
+        buildInProgress = false
+        if (onBuildComplete) onBuildComplete(null, result)
+        return result
+      } catch (error) {
+        // If this is already a retry, fail permanently
+        if (isRetry) {
+          buildInProgress = false
+          const result = error.result || { code: 1, stdout: '', stderr: error.message, success: false }
+          if (onBuildComplete) onBuildComplete(null, result)
+          throw error
+        }
+
+        // First failure - try to recover by deleting node_modules and reinstalling
+        console.log('[Build] Build failed, attempting recovery with clean node_modules...')
+        if (onBuildProgress) onBuildProgress('Build failed, attempting recovery with clean node_modules...', 'stderr', 0)
+
+        try {
+          await deleteNodeModules()
+          await runNpmInstall()
+          const result = await runNpmBuild()
+          buildInProgress = false
+          console.log('[Build] Recovery successful!')
+          if (onBuildComplete) onBuildComplete(null, result)
+          return result
+        } catch (retryError) {
+          buildInProgress = false
+          const result = retryError.result || { code: 1, stdout: '', stderr: retryError.message, success: false }
+          if (onBuildComplete) onBuildComplete(null, result)
+          throw retryError
+        }
+      }
+    })()
   }
 
   const repos = new Git(repoPath, {

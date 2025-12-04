@@ -194,10 +194,14 @@ export default async ({ req, res, next, router }) => {
               onBuildComplete: async (error, result) => {
                 if (error) {
                   if (currentJob) await currentJob.fail(error.message)
+                } else if (result && !result.success) {
+                  // Build exited with non-zero code
+                  const errorMsg = result.stderr?.slice(-500) || result.stdout?.slice(-500) || 'Build failed with unknown error'
+                  if (currentJob) await currentJob.fail(errorMsg)
                 } else {
                   if (currentJob) await currentJob.complete({
-                    success: result.success,
-                    duration: result.duration || 'N/A'
+                    success: true,
+                    duration: result?.duration || 'N/A'
                   })
                 }
               }
