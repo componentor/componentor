@@ -4,7 +4,6 @@ import { fileURLToPath } from 'url'
 import { Worker } from 'worker_threads'
 import express from 'express'
 import { createContext } from '../../../core/types/context.mjs'
-import AdminProvider from './includes/providers/index.mjs'
 import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.ts'
 import { getCachedSSR, setCachedSSR, invalidateSSRCache } from '../../../core/services/SharedSSRCache.ts'
 import { invalidateCache, getFolderHash } from '../../../core/services/FolderHashCache.ts'
@@ -213,7 +212,10 @@ export default async ({ req, res, next, router }) => {
         const url = await getAttachmentUrl(8)
         // console.log({ url })
 
-        // Attach admin menu
+        // Attach admin menu - use dynamic import with cache-busting for hot reload support
+        const { hash: providerHash } = await getFolderHash(__dirname)
+        const AdminProviderModule = await import(`./includes/providers/index.mjs?t=${providerHash}`)
+        const AdminProvider = AdminProviderModule.default
         await AdminProvider({ req, res, next })
 
         addAction('create_post', ({ req, res, next, postType, post }) => {
