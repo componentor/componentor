@@ -255,6 +255,8 @@ export default async ({ req, res, next, router }) => {
             tags: { url: req.url, source: cached.source, age: Date.now() - cached.timestamp }
           })
           cacheSpan.end()
+          // Ensure browser always revalidates HTML to get fresh asset references
+          res.setHeader('Cache-Control', 'no-cache, must-revalidate')
           return res.type('html').send(cached.html)
         }
 
@@ -355,6 +357,8 @@ export default async ({ req, res, next, router }) => {
         ssrSpan.addTag('responseSize', html.length)
         ssrSpan.end()
 
+        // Ensure browser always revalidates HTML to get fresh asset references
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate')
         res.type('html').send(html)
       })
     }
