@@ -2,6 +2,10 @@ import { getCurrentInstance, useSSRContext } from 'vue'
 
 let hydrationId = 0
 
+export function resetHydrationId() {
+    hydrationId = 0
+}
+
 export default {
     install(app) {
         const isClient = typeof window !== 'undefined'

@@ -6,17 +6,18 @@ import {
 } from 'vue'
 import App from '@/App.vue'
 import router from '@/router.js'
-import { VueHeadMixin, createUnhead } from '@unhead/vue'
 import feathers from '@feathersjs/client'
 import sio from 'socket.io-client'
 import '@/index.css'
 
 const isServer = typeof window === 'undefined'
 const isDarkMode = !isServer && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-const account = ref()
+
 const createApp = async () => {
+    // Create account ref inside createApp to avoid state leaking between SSR renders
+    const account = ref()
     const app = createSSRApp(App)
-    const head = createUnhead()
+    // Note: head is created in entry-server.js and entry-client.js, not here
     const currentTheme = isServer ? global?.theme : localStorage.getItem('theme')
     const theme = ref(currentTheme || (isDarkMode ? 'dark' : 'light'))
     const baseMethods = ['get', 'find', 'create', 'patch', 'update', 'remove']
@@ -176,8 +177,7 @@ const createApp = async () => {
             console.log('Successfully logged out!')
         }
 
-        app.mixin(VueHeadMixin)
-        app.use(head)
+        // Note: head mixin is applied in entry-server.js and entry-client.js
         app.use(router)
         app.provide('auth', auth)
         app.provide('manager', manager)

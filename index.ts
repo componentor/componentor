@@ -1,8 +1,8 @@
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { Worker } from 'worker_threads'
 import express from 'express'
-import { transformHtmlTemplate } from '@unhead/vue/server'
 import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
 import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.ts'
@@ -11,10 +11,20 @@ import { invalidateCache, getFolderHash } from '../../../core/services/FolderHas
 import { UAParser } from 'ua-parser-js'
 import cookie from 'cookie'
 
+// SSR worker data passed via workerData (not postMessage)
+interface SSRWorkerData {
+  themeDir: string
+  url: string
+  buildHash: string
+  theme: string | undefined
+  accessToken: string | undefined
+  windowWidth: number
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, 'client')
-const clientTemplate = path.join(__dirname, 'client', 'index.html')
 const serverEntry = path.join(__dirname, 'server', 'entry-server.js')
+const ssrWorkerPath = path.join(__dirname, 'includes', 'ssr-worker.ts')
 const workdirPath = path.join(__dirname, 'workdir')
 const workdirGitignore = path.join(workdirPath, '.gitignore')
 
@@ -23,37 +33,93 @@ if (!fs.existsSync(workdirGitignore)) {
   fs.writeFileSync(workdirGitignore, 'node_modules\n', 'utf-8')
 }
 
-// Dynamically load render function (only available after first build)
-// These are cached per-worker and reloaded when build hash changes
-let render: ((url: string) => Promise<{ html?: string; head?: unknown; hydratedData?: unknown }>) | null = null
-let template = ''
-let lastLoadedHash = ''
+// Execute SSR in a NEW worker thread for each request
+// This ensures complete isolation - matching the working jstune server pattern
+async function runDynamicModule(workerData: SSRWorkerData): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let worker: Worker | null = null
+    let isResolved = false
+    let timeoutId: NodeJS.Timeout | null = null
 
-function reloadTemplate() {
-  template = fs.existsSync(clientTemplate)
-    ? fs.readFileSync(clientTemplate, 'utf-8')
-    : '<!DOCTYPE html><html><head></head><body><!--app-html--></body></html>'
-}
+    try {
+      console.log(`[SSR] Starting worker for ${workerData.url}`)
 
-// Initial template load
-reloadTemplate()
+      worker = new Worker(ssrWorkerPath, {
+        workerData,
+        execArgv: ['--import', 'tsx'] // Enable TypeScript support in worker
+      })
 
-async function loadRender(buildHash: string) {
-  // If hash changed, force reload
-  if (buildHash !== lastLoadedHash) {
-    render = null
-    reloadTemplate()
-    lastLoadedHash = buildHash
-  }
+      // Add timeout to prevent worker from hanging indefinitely
+      timeoutId = setTimeout(() => {
+        if (!isResolved && worker) {
+          console.error(`[SSR] Worker timeout for ${workerData.url}, terminating worker`)
+          cleanup(true)
+          resolve('') // Resolve with empty string on timeout
+        }
+      }, 10000) // 10 second timeout (matching jstune)
 
-  if (render) return render
-  if (!fs.existsSync(serverEntry)) return null
+      const cleanup = (terminate = true) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        if (worker) {
+          worker.removeAllListeners()
+          if (terminate) {
+            worker.terminate().catch(err => {
+              console.error('[SSR] Error terminating worker:', err.message)
+            })
+          }
+          worker = null
+        }
+      }
 
-  // Use hash as cache buster to get fresh module
-  const module = await import(`./server/entry-server.js?t=${buildHash}`)
-  render = module.render
+      worker.on('message', (msg) => {
+        if (!isResolved) {
+          isResolved = true
+          console.log(`[SSR] Worker completed for ${workerData.url}`)
+          cleanup(true)
 
-  return render
+          // Check if it's an error response
+          if (msg && typeof msg === 'object' && 'error' in msg) {
+            reject(new Error(msg.error))
+          } else {
+            resolve(msg as string)
+          }
+        }
+      })
+
+      worker.on('error', (err) => {
+        if (!isResolved) {
+          isResolved = true
+          console.error(`[SSR] Worker error for ${workerData.url}:`, err.message)
+          cleanup(true)
+          reject(err)
+        }
+      })
+
+      worker.on('exit', (code) => {
+        if (!isResolved) {
+          isResolved = true
+          if (code !== 0) {
+            console.error(`[SSR] Worker exited with code ${code} for ${workerData.url}`)
+            cleanup(false) // Already exited, don't terminate
+            reject(new Error(`Worker stopped with exit code ${code}`))
+          } else {
+            cleanup(false)
+            resolve('')
+          }
+        }
+      })
+
+    } catch (err) {
+      if (!isResolved) {
+        isResolved = true
+        console.error(`[SSR] Failed to create worker for ${workerData.url}:`, err)
+        reject(err)
+      }
+    }
+  })
 }
 
 // Called after build completes - invalidates folder hash cache which broadcasts to all workers
@@ -307,7 +373,7 @@ export default async ({ req, res, next, router }) => {
           return res.type('html').send(cached.html)
         }
 
-        // Cache miss - render SSR
+        // Cache miss - render SSR in worker thread
         const ssrSpan = startSpan('theme.componentor.ssr', {
           category: 'render',
           tags: { url: req.url, cacheMiss: true }
@@ -316,12 +382,8 @@ export default async ({ req, res, next, router }) => {
         // Get current build hash to detect when SSR assets need reloading
         const { hash: buildHash } = await getFolderHash(__dirname)
 
-        // Load prebuilt SSR server entry (reloads if hash changed)
-        const loadSpan = startSpan('theme.componentor.loadRender', { category: 'io' })
-        const renderFn = await loadRender(buildHash)
-        loadSpan.end()
-
-        if (typeof renderFn !== 'function') {
+        // Check if theme is built
+        if (!fs.existsSync(serverEntry)) {
           ssrSpan.addTag('error', 'not_built')
           ssrSpan.end()
           return res.status(503).send('Theme not built yet. Please trigger a build first.')
@@ -342,64 +404,40 @@ export default async ({ req, res, next, router }) => {
           windowWidth = Number(cookies?.windowWidth || 0) || guessedWidth
         } catch(e) {}
 
-        const originalFetch = fetch
-
-        global.theme = theme
-        global.accessToken = accessToken
-        global.windowWidth = windowWidth || 1280
-        global.fetch = async (uri, options = {}) => {
-          /*
-          @todo - Could create nonce logic give access to e.g. internal apis
-          if (uri.startsWith('')) {
-            options = {
-              ...options,
-              headers: {
-                ...options.headers,
-                'x-ssr-nonce': nonce,
-              }
-            }
-          }*/
-          return originalFetch(uri, options)
-        }
-
         console.log({
           theme,
           accessToken,
           windowWidth: windowWidth || 1280
         })
 
-        // Trace Vue SSR rendering
-        const vueRenderSpan = startSpan('theme.componentor.vueRender', { category: 'render' })
-        const rendered = await renderFn(req.url)
-        vueRenderSpan.addTag('hasHead', !!rendered.head)
-        vueRenderSpan.addTag('hasHydrated', !!rendered.hydratedData)
-        vueRenderSpan.end()
-
-        // Trace HTML template transformation
-        const templateSpan = startSpan('theme.componentor.templateTransform', { category: 'render' })
+        // Execute SSR in a NEW worker thread (complete isolation per request)
+        // Worker handles full HTML assembly (including head transformation, styles, scripts)
+        // Worker is terminated after completion - matching jstune server pattern
+        const workerSpan = startSpan('theme.componentor.workerSSR', { category: 'render' })
         let html = ''
-        if (rendered.head) {
-          html = await transformHtmlTemplate(
-            rendered.head,
-            template.replace(`<!--app-html-->`, rendered.html ?? '')
-          )
-        } else {
-          html = template.replace(`<!--app-html-->`, rendered.html ?? '')
+        try {
+          html = await runDynamicModule({
+            themeDir: __dirname,
+            url: req.url,
+            buildHash,
+            theme,
+            accessToken,
+            windowWidth: windowWidth || 1280
+          })
+        } catch (err) {
+          workerSpan.addTag('error', err instanceof Error ? err.message : 'unknown')
+          workerSpan.end()
+          ssrSpan.end()
+          console.error('[SSR Worker] Error:', err)
+          return res.status(500).send('SSR rendering failed')
         }
+        workerSpan.end()
 
-        if (global?.vueplayStyles) {
-          let css = ''
-          for (const key of Object.keys(global.vueplayStyles)) {
-            css += global.vueplayStyles[key] + '\n'
-          }
-          html = html.replace('</head>', `<style>${css}</style></head>`)
+        if (!html) {
+          ssrSpan.addTag('error', 'empty_response')
+          ssrSpan.end()
+          return res.status(500).send('SSR rendering returned empty response')
         }
-
-        if (rendered.hydratedData) {
-          html = html.replace('<head>', `<head><script>window.__HYDRATED_DATA__ = ${JSON.stringify(rendered.hydratedData)}</script>`)
-        }
-        templateSpan.addTag('htmlSize', html.length)
-        templateSpan.end()
 
         // Cache the rendered HTML (shared across all workers)
         setCachedSSR(cacheKey, html)

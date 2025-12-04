@@ -1,8 +1,9 @@
 <template>
 	<Home>
-		<template #header="">
+		<template #header>
 			<Header style="position: sticky; top: 0px"></Header>
-		</template> <template #default="">
+		</template>
+		<template #default>
 			<Box
 				style="justify-content:center;padding:0px;min-height:calc(100vh - 60px)"
 				expand="true"
@@ -19,7 +20,7 @@
 						type="{`default`:{`xs`:{`light`:`h1`},`2xl`:{`light`:`h1`}}}"
 						lineHeight="{`default`:{`xs`:{`light`:`47px`},`sm`:{`light`:`67px`},`md`:{`light`:`72px`},`lg`:{`light`:`90px`}}}"
 						fontWeight="{`default`:{`xs`:{`light`:`250`}}}"
-					>Profile</Title>
+					>Me</Title>
 					<Title
 						style="text-align:center"
 						type="{`default`:{`xs`:{`light`:`h2`},`2xl`:{`light`:`h2`}}}"
@@ -37,52 +38,15 @@
 							style="width:100%"
 							padding="{`default`:{`xs`:{`light`:`20px 20px 0px`}}}"
 							justifyContent="{`default`:{`xs`:{`light`:`center`}}}"
-						><label style="font-weight:150">Created at {{(new Date(acc?.user?.created_at)).toLocaleString()}}</label></Box>
+						>
+							<label style="font-weight:150">Created at {{(new Date(acc?.user?.created_at)).toLocaleString()}}</label>
+						</Box>
 						<Box
 							style="width:100%"
 							padding="{`default`:{`xs`:{`light`:`10px 20px 0px`}}}"
 							justifyContent="{`default`:{`xs`:{`light`:`center`}}}"
-						><label style="margin-bottom:5px;font-weight:150">Updated at {{(new Date(acc?.user?.updated_at)).toLocaleString()}}</label></Box>
-						<Box
-							column="{`default`:{`xs`:{`light`:true}}}"
-							alignItems="{`default`:{`xs`:{`light`:`center`}}}"
 						>
-							<Box
-								column="{`default`:{`xs`:{`light`:true}}}"
-								padding="{`default`:{`xs`:{`light`:`0px`}}}"
-								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Username</label><input
-									v-model="acc.user.username"
-									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
-									placeholder="Username"
-								/></Box>
-							<Box
-								column="{`default`:{`xs`:{`light`:true}}}"
-								padding="{`default`:{`xs`:{`light`:`0px`}}}"
-								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">First name</label><input
-									v-model="acc.user.first_name"
-									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
-									placeholder="First name"
-								/></Box>
-							<Box
-								column="{`default`:{`xs`:{`light`:true}}}"
-								padding="{`default`:{`xs`:{`light`:`0px`}}}"
-								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Middle name</label><input
-									v-model="acc.user.middle_name"
-									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
-									placeholder="Middle name"
-								/></Box>
-							<Box
-								column="{`default`:{`xs`:{`light`:true}}}"
-								padding="{`default`:{`xs`:{`light`:`0px`}}}"
-								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Last name</label><input
-									v-model="acc.user.last_name"
-									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
-									placeholder="Last name"
-								/></Box>
+							<label style="margin-bottom:5px;font-weight:150">Updated at {{(new Date(acc?.user?.updated_at)).toLocaleString()}}</label>
 						</Box>
 						<Box
 							column="{`default`:{`xs`:{`light`:true}}}"
@@ -92,38 +56,103 @@
 								column="{`default`:{`xs`:{`light`:true}}}"
 								padding="{`default`:{`xs`:{`light`:`0px`}}}"
 								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Email {{acc?.user?.email && !acc?.user?.email_verified_at ? '(Unverified)' : ''}}</label><input
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Username</label>
+								<input
+									v-model="acc.user.username"
+									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
+									placeholder="Username"
+								/>
+							</Box>
+							<Box
+								column="{`default`:{`xs`:{`light`:true}}}"
+								padding="{`default`:{`xs`:{`light`:`0px`}}}"
+								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">First name</label>
+								<input
+									v-model="acc.user.first_name"
+									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
+									placeholder="First name"
+								/>
+							</Box>
+							<Box
+								column="{`default`:{`xs`:{`light`:true}}}"
+								padding="{`default`:{`xs`:{`light`:`0px`}}}"
+								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Middle name</label>
+								<input
+									v-model="acc.user.middle_name"
+									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
+									placeholder="Middle name"
+								/>
+							</Box>
+							<Box
+								column="{`default`:{`xs`:{`light`:true}}}"
+								padding="{`default`:{`xs`:{`light`:`0px`}}}"
+								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Last name</label>
+								<input
+									v-model="acc.user.last_name"
+									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
+									placeholder="Last name"
+								/>
+							</Box>
+						</Box>
+						<Box
+							column="{`default`:{`xs`:{`light`:true}}}"
+							alignItems="{`default`:{`xs`:{`light`:`center`}}}"
+						>
+							<Box
+								column="{`default`:{`xs`:{`light`:true}}}"
+								padding="{`default`:{`xs`:{`light`:`0px`}}}"
+								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Email {{acc?.user?.email && !acc?.user?.email_verified_at ? '(Unverified)' : ''}}</label>
+								<input
 									v-model="acc.user.email"
 									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
 									placeholder="Email"
-								/></Box>
+								/>
+							</Box>
 							<Box
 								column="{`default`:{`xs`:{`light`:true}}}"
 								padding="{`default`:{`xs`:{`light`:`0px`}}}"
 								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Phone {{acc?.user?.phone && !acc?.user?.phone_verified_at ? '(Unverified)' : ''}}</label><input
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Phone {{acc?.user?.phone && !acc?.user?.phone_verified_at ? '(Unverified)' : ''}}</label>
+								<input
 									v-model="acc.user.phone"
 									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
 									placeholder="Phone"
-								/></Box>
+								/>
+							</Box>
 							<Box
 								column="{`default`:{`xs`:{`light`:true}}}"
 								padding="{`default`:{`xs`:{`light`:`0px`}}}"
 								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Picture</label><input
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Picture</label>
+								<input
 									v-model="acc.user.picture"
 									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
 									placeholder="Picture url"
-								/></Box>
+								/>
+							</Box>
 							<Box
 								column="{`default`:{`xs`:{`light`:true}}}"
 								padding="{`default`:{`xs`:{`light`:`0px`}}}"
 								marginTop="{`default`:{`xs`:{`light`:`15px`}}}"
-							><label style="margin-bottom:5px;width:200px;font-weight:150">Locale</label><input
+							>
+								<label style="margin-bottom:5px;width:200px;font-weight:150">Locale</label>
+								<input
 									v-model="acc.user.locale"
 									style="padding:15px;width:200px;border-radius:5px;color:color-mix(in oklch, var(--color-neutral) 20%, black)"
 									placeholder="My token"
-								/></Box>
+								/>
+							</Box>
 						</Box>
 					</Box>
 					<Box marginBottom="{`default`:{`xs`:{`light`:`100px`}}}">
@@ -246,13 +275,17 @@
 								type="{`default`:{`xs`:{`light`:`h3`}}}"
 								marginTop="{`default`:{`xs`:{`light`:`12px`}}}"
 								marginBottom="{`default`:{`xs`:{`light`:`12px`}}}"
-							>Vue Play<br /><br />Status: {{ subscription.status }}</Title>
+							>Vue Play
+								<br />
+								<br />Status: {{ subscription.status }}
+							</Title>
 						</Box>
 					</Box>
 					<div style="margin-bottom:150px"></div>
 				</Box>
 			</Box>
-		</template> <template #footer="">
+		</template>
+		<template #footer>
 			<Footer></Footer>
 		</template>
 	</Home>

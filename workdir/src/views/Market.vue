@@ -3,11 +3,13 @@
 		headerHeight="96"
 		style="position:relative"
 	>
-		<template #header="">
+		<template #header>
 			<Header style="position: sticky; top: 0px; width: 100%"></Header>
-		</template> <template #sidebar="">
+		</template>
+		<template #sidebar>
 			<Sidebar style="position:sticky; top: 0px; width: 100%"></Sidebar>
-		</template> <template #default="">
+		</template>
+		<template #default>
 			<Box
 				expand="{`default`:{`xs`:{`light`:true}}}"
 				justifyContent="{`default`:{`xs`:{`light`:`center`}}}"
@@ -28,11 +30,13 @@
 						border="{`default`:{`xs`:{`light`:`1px solid #0002`}}}"
 						borderRadius="{`default`:{`xs`:{`light`:`8px`}}}"
 						backgroundColor="{`default`:{`xs`:{`light`:`color-mix(in oklch, var(--color-neutral) 0%, white)`,`dark`:`color-mix(in oklch, var(--color-neutral) 0%, black)`}}}"
-					><input
+					>
+						<input
 							v-model="term"
 							style="padding:13px 15px;font-size:22px;width:100%;background-color:transparent;border-radius:8px;"
-							:placeholder="`Search in category '${category}' ...`"
-						/> </Box>
+							:placeholder="`Search marketplace in category '${category}' ...`"
+						/>
+					</Box>
 					<Box
 						padding="{`default`:{`xs`:{`light`:`0px`}}}"
 						marginTop="{`default`:{`xs`:{`light`:`60px`}}}"
@@ -43,7 +47,8 @@
 							style="padding: 5px"
 						>
 							No results found.
-						</div><template v-for="component in components?.data || []">
+						</div>
+						<template v-for="component in components?.data || []">
 							<Box
 								backgroundColor="{`default`:{`xs`:{`light`:`var(--color-primary)`,`dark`:`color-mix(in oklch, var(--color-primary) 80%, black)`}},`hover`:{`xs`:{`light`:`color-mix(in oklch, var(--color-primary) 80%, white)`,`dark`:`color-mix(in oklch, var(--color-primary) 70%, black)`}}}"
 								color="{`default`:{`xs`:{`light`:`color-mix(in oklch, var(--color-neutral) 0%, white)`}}}"
@@ -96,7 +101,8 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 									alignItems="{`default`:{`xs`:{`light`:`center`}}}"
 									v-else-if="!component?.icon"
 									marginBottom="{`default`:{`xs`:{`light`:`20px`}}}"
-								><svg
+								>
+									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 32 32"
 										xml:space="preserve"
@@ -107,7 +113,8 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 											d="m25.2 20.9-.7-.7 3.5-3.5-4.2-4.2-.7.7c-1.2 1.2-3.1 1.2-4.2 0-1.2-1.2-1.2-3.1 0-4.2l.7-.7L15.3 4l-3.5 3.5-.7-.7C9.9 5.6 8 5.6 6.8 6.8s-1.2 3.1 0 4.2l.7.7L4 15.3l4.2 4.2.7-.7c1.2-1.2 3.1-1.2 4.2 0 1.2 1.2 1.2 3.1 0 4.2l-.7.7 4.2 4.2 3.5-3.5.7.7c1.2 1.2 3.1 1.2 4.2 0 1.4-1.1 1.4-3 .2-4.2"
 											style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10"
 										/>
-									</svg><svg
+									</svg>
+									<svg
 										viewBox="0 0 24 24"
 										xmlns="http://www.w3.org/2000/svg"
 										v-else-if="component?.type !== 'vue-sfc'"
@@ -119,7 +126,8 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 											stroke-width="2"
 											d="M1 3h22v18H1zm0 5h22M7 8v13"
 										/>
-									</svg></Box>
+									</svg>
+								</Box>
 							</Box>
 							<Box
 								backgroundColor="{`default`:{`xs`:{`light`:`color-mix(in oklch, var(--color-danger) 80%, white)`,`dark`:`color-mix(in oklch, var(--color-danger) 80%, white)`}},`hover`:{`xs`:{`light`:`color-mix(in oklch, var(--color-danger) 60%, white)`,`dark`:`color-mix(in oklch, var(--color-danger) 90%, white)`}}}"
@@ -169,7 +177,8 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 									alignItems="{`default`:{`xs`:{`light`:`center`}}}"
 									v-else-if="!component?.icon"
 									marginBottom="{`default`:{`xs`:{`light`:`20px`}}}"
-								><svg
+								>
+									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 32 32"
 										xml:space="preserve"
@@ -180,7 +189,8 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 											d="m25.2 20.9-.7-.7 3.5-3.5-4.2-4.2-.7.7c-1.2 1.2-3.1 1.2-4.2 0-1.2-1.2-1.2-3.1 0-4.2l.7-.7L15.3 4l-3.5 3.5-.7-.7C9.9 5.6 8 5.6 6.8 6.8s-1.2 3.1 0 4.2l.7.7L4 15.3l4.2 4.2.7-.7c1.2-1.2 3.1-1.2 4.2 0 1.2 1.2 1.2 3.1 0 4.2l-.7.7 4.2 4.2 3.5-3.5.7.7c1.2 1.2 3.1 1.2 4.2 0 1.4-1.1 1.4-3 .2-4.2"
 											style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10"
 										/>
-									</svg><svg
+									</svg>
+									<svg
 										viewBox="0 0 24 24"
 										xmlns="http://www.w3.org/2000/svg"
 										v-else-if="component?.type !== 'vue-sfc'"
@@ -192,19 +202,23 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 											stroke-width="2"
 											d="M1 3h22v18H1zm0 5h22M7 8v13"
 										/>
-									</svg></Box>
+									</svg>
+								</Box>
 							</Box>
 						</template>
 					</Box>
 				</Box>
 			</Box>
-		</template> <template #footer="">
+		</template>
+		<template #footer>
 			<Footer style="width: 100%"></Footer>
 		</template>
 	</Dashboard>
 </template>
 <script>
-	import { useSSRContext } from 'vue'
+	import {
+		useSSRContext
+	} from 'vue';
 	import Link from '@vueplayio/link';
 	import Dashboard from '@/_templates/arctic/views/Dashboard.vue';
 	import Footer from '@/components/Footer.vue';
@@ -236,7 +250,7 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 			term: ''
 		}),
 		async mounted() {
-			if (this.components) return
+			if (this.components) return;
 			await this.getComponents();
 		},
 		async serverPrefetch() {
@@ -398,12 +412,12 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 		},
 		head() {
 			const baseUrl = "https://vueplay.com";
-			const imageUrl = `${baseUrl}/screenshot.png`; // Using the provided image URL
+			const imageUrl = `${baseUrl}/screenshot.png`;
+			// Using the provided image URL
 
 			let title = "Vue Play Market";
 			let description = "Explore and discover a wide range of Vue components and applications on the Vue Play Market.";
 			let currentUrl = `${baseUrl}/market`;
-
 			// Customize title and description based on category
 			if (this.category && this.category !== 'all') {
 				const categoryName = this.typeName(this.type || this.category);
@@ -411,12 +425,10 @@ backgroundImage: component.icon?.startsWith('<svg') ? undefined : 'url(' + compo
 				description = `Browse ${categoryName}s on the Vue Play Market. Find the perfect ${categoryName} for your next Vue project.`;
 				currentUrl = `${baseUrl}/market/${this.category}`;
 			}
-
 			// Add search term to description if present
 			if (this.term) {
 				description += ` Search results for "${this.term}".`;
 			}
-
 			return {
 				title: title,
 				meta: [{

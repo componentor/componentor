@@ -1,6 +1,6 @@
 {
   "name": "@componentor/componentor",
-  "version": "1.0.42",
+  "version": "1.0.43",
   "description": "Drag & Drop Vue Website Builder",
   "main": "index.js",
   "scripts": {

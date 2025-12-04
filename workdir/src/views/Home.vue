@@ -21,7 +21,7 @@
 						type="{`default`:{`xs`:{`light`:`h1`},`2xl`:{`light`:`h1`}}}"
 						lineHeight="{`default`:{`xs`:{`light`:`47px`},`sm`:{`light`:`67px`},`md`:{`light`:`72px`},`lg`:{`light`:`96px`}}}"
 						fontWeight="{`default`:{`xs`:{`light`:`250`}}}"
-					>Build Visually,
+					>Build Vizually,
 						<br />Create Anything
 					</Title>
 					<Title
@@ -449,28 +449,17 @@
 		methods: {
 			async init() {
 				try {
-					const usersCount = (await this.auth.service('users')
-							.count({}))
-						?.count;
-					this.usersCount = usersCount || 0;
-					const websitesCount = (await this.manager.service('applications')
-							.count({
-								type: 'vue-app'
-							}))
-						?.count;
-					this.websitesCount = websitesCount || 0;
-					const templatesCount = (await this.manager.service('applications')
-							.count({
-								type: 'vue-template'
-							}))
-						?.count;
-					this.templatesCount = templatesCount || 0;
-					const componentsCount = (await this.manager.service('applications')
-							.count({
-								type: 'vue-sfc'
-							}))
-						?.count;
-					this.componentsCount = componentsCount || 0;
+					// Parallel API calls for better SSR performance
+					const [usersRes, websitesRes, templatesRes, componentsRes] = await Promise.all([
+						this.auth.service('users').count({}),
+						this.manager.service('applications').count({ type: 'vue-app' }),
+						this.manager.service('applications').count({ type: 'vue-template' }),
+						this.manager.service('applications').count({ type: 'vue-sfc' })
+					]);
+					this.usersCount = usersRes?.count || 0;
+					this.websitesCount = websitesRes?.count || 0;
+					this.templatesCount = templatesRes?.count || 0;
+					this.componentsCount = componentsRes?.count || 0;
 				} catch (e) {
 					console.log('err', e);
 				}
