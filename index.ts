@@ -6,7 +6,8 @@ import { transformHtmlTemplate } from '@unhead/vue/server'
 import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
 import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.ts'
-import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.ts'
+import { getCachedSSR, setCachedSSR, invalidateSSRCache } from '../../../core/services/SharedSSRCache.ts'
+import { invalidateCache, getFolderHash } from '../../../core/services/FolderHashCache.ts'
 import { UAParser } from 'ua-parser-js'
 import cookie from 'cookie'
 
@@ -23,21 +24,46 @@ if (!fs.existsSync(workdirGitignore)) {
 }
 
 // Dynamically load render function (only available after first build)
-let render = null
+// These are cached per-worker and reloaded when build hash changes
+let render: ((url: string) => Promise<{ html?: string; head?: unknown; hydratedData?: unknown }>) | null = null
+let template = ''
+let lastLoadedHash = ''
 
-async function loadRender() {
+function reloadTemplate() {
+  template = fs.existsSync(clientTemplate)
+    ? fs.readFileSync(clientTemplate, 'utf-8')
+    : '<!DOCTYPE html><html><head></head><body><!--app-html--></body></html>'
+}
+
+// Initial template load
+reloadTemplate()
+
+async function loadRender(buildHash: string) {
+  // If hash changed, force reload
+  if (buildHash !== lastLoadedHash) {
+    render = null
+    reloadTemplate()
+    lastLoadedHash = buildHash
+  }
+
   if (render) return render
   if (!fs.existsSync(serverEntry)) return null
 
-  const module = await import('./server/entry-server.js')
+  // Use hash as cache buster to get fresh module
+  const module = await import(`./server/entry-server.js?t=${buildHash}`)
   render = module.render
 
   return render
 }
 
-const template = fs.existsSync(clientTemplate)
-  ? fs.readFileSync(clientTemplate, 'utf-8')
-  : '<!DOCTYPE html><html><head></head><body><!--app-html--></body></html>'
+// Called after build completes - invalidates folder hash cache which broadcasts to all workers
+export function reloadAfterBuild() {
+  console.log('[componentor] Build complete, invalidating caches...')
+  // Invalidate the theme folder's hash - this broadcasts to all workers via FolderHashCache IPC
+  invalidateCache(__dirname)
+  // Also invalidate SSR HTML cache
+  invalidateSSRCache()
+}
 
 // Cache gitserver module at theme level (not per-request)
 let cachedGitServer = null
@@ -199,6 +225,11 @@ export default async ({ req, res, next, router }) => {
                   const errorMsg = result.stderr?.slice(-500) || result.stdout?.slice(-500) || 'Build failed with unknown error'
                   if (currentJob) await currentJob.fail(errorMsg)
                 } else {
+                  // Reload SSR assets (template + render function) after successful build
+                  reloadAfterBuild()
+                  // Invalidate SSR cache so next request gets fresh content
+                  invalidateSSRCache()
+
                   if (currentJob) await currentJob.complete({
                     success: true,
                     duration: result?.duration || 'N/A'
@@ -270,9 +301,12 @@ export default async ({ req, res, next, router }) => {
           tags: { url: req.url, cacheMiss: true }
         })
 
-        // Load prebuilt SSR server entry
+        // Get current build hash to detect when SSR assets need reloading
+        const { hash: buildHash } = await getFolderHash(__dirname)
+
+        // Load prebuilt SSR server entry (reloads if hash changed)
         const loadSpan = startSpan('theme.componentor.loadRender', { category: 'io' })
-        const renderFn = await loadRender()
+        const renderFn = await loadRender(buildHash)
         loadSpan.end()
 
         if (typeof renderFn !== 'function') {
