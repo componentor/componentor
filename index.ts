@@ -273,7 +273,19 @@ export default async ({ req, res, next, router }) => {
 
       // Serve client assets (but not index.html - let SSR handle that)
       if (fs.existsSync(clientDist)) {
-        router.use(express.static(clientDist, { index: false }))
+        router.use(express.static(clientDist, {
+          index: false,
+          // Hashed assets can be cached forever, unhashed assets should revalidate
+          setHeaders: (res, filePath) => {
+            // Files with hash in name (e.g., index-CiK26fOL.js) can be cached long-term
+            if (/\.[a-zA-Z0-9]{8,}\.(js|css|woff2?|ttf|eot)$/.test(filePath)) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+            } else {
+              // Other assets should revalidate
+              res.setHeader('Cache-Control', 'no-cache, must-revalidate')
+            }
+          }
+        }))
       }
 
       router.get(/.*/, async (req, res) => {
