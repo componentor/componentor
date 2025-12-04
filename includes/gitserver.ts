@@ -166,6 +166,31 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
       })
     }
 
+    // Helper to check if vite is properly installed (symlink not corrupted)
+    const isViteCorrupted = () => {
+      try {
+        const viteBinPath = join(workdirPath, 'node_modules', '.bin', 'vite')
+        const viteModulePath = join(workdirPath, 'node_modules', 'vite', 'dist', 'node', 'cli.js')
+
+        // Check if .bin/vite exists
+        if (!fs.existsSync(viteBinPath)) {
+          console.log('[Build] Vite binary not found, needs install')
+          return true
+        }
+
+        // Check if actual vite module exists
+        if (!fs.existsSync(viteModulePath)) {
+          console.log('[Build] Vite module not found at expected path, likely corrupted')
+          return true
+        }
+
+        return false
+      } catch (err) {
+        console.error('[Build] Error checking vite:', err)
+        return true
+      }
+    }
+
     // Helper to run npm install
     const runNpmInstall = (): Promise<void> => {
       return new Promise((resolve, reject) => {
@@ -297,23 +322,32 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
     // Main build flow with retry logic
     return (async () => {
       try {
+        // Pre-check: if vite is corrupted, delete node_modules first
+        if (isViteCorrupted()) {
+          console.log('[Build] Detected corrupted or missing vite installation, cleaning up...')
+          if (onBuildProgress) onBuildProgress('Detected corrupted vite, cleaning up...', 'stdout', 0)
+          await deleteNodeModules()
+        }
+
         await runNpmInstall()
         const result = await runNpmBuild()
         buildInProgress = false
         if (onBuildComplete) onBuildComplete(null, result)
         return result
-      } catch (error) {
+      } catch (error: any) {
         // If this is already a retry, fail permanently
         if (isRetry) {
           buildInProgress = false
-          const result = error.result || { code: 1, stdout: '', stderr: error.message, success: false }
+          const result = error.result || { code: 1, stdout: '', stderr: error.message || String(error), success: false }
           if (onBuildComplete) onBuildComplete(null, result)
           throw error
         }
 
         // First failure - try to recover by deleting node_modules and reinstalling
-        console.log('[Build] Build failed, attempting recovery with clean node_modules...')
-        if (onBuildProgress) onBuildProgress('Build failed, attempting recovery with clean node_modules...', 'stderr', 0)
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        console.error('[Build] Build failed, attempting recovery with clean node_modules...')
+        console.error('[Build] Original error:', errorMsg)
+        if (onBuildProgress) onBuildProgress(`Build failed (${errorMsg.slice(0, 100)}...), attempting recovery...`, 'stderr', 0)
 
         try {
           await deleteNodeModules()
@@ -323,9 +357,10 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
           console.log('[Build] Recovery successful!')
           if (onBuildComplete) onBuildComplete(null, result)
           return result
-        } catch (retryError) {
+        } catch (retryError: any) {
           buildInProgress = false
-          const result = retryError.result || { code: 1, stdout: '', stderr: retryError.message, success: false }
+          console.error('[Build] Recovery also failed:', retryError instanceof Error ? retryError.message : String(retryError))
+          const result = retryError.result || { code: 1, stdout: '', stderr: retryError.message || String(retryError), success: false }
           if (onBuildComplete) onBuildComplete(null, result)
           throw retryError
         }
