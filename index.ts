@@ -6,7 +6,7 @@ import { transformHtmlTemplate } from '@unhead/vue/server'
 import { createContext } from '../../../core/types/context.mjs'
 import AdminProvider from './includes/providers/index.mjs'
 import jwtMiddleware from '../../../core/middlewares/jwtMiddleware.ts'
-import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.mjs'
+import { getCachedSSR, setCachedSSR } from '../../../core/services/SharedSSRCache.ts'
 import { UAParser } from 'ua-parser-js'
 import cookie from 'cookie'
 
