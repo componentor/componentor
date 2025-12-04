@@ -166,6 +166,82 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
       })
     }
 
+    // Helper to backup build outputs before cleaning (for restore on failure)
+    const backupBuildOutputs = () => {
+      const clientDir = join(themeDir, 'client')
+      const serverDir = join(themeDir, 'server')
+      const clientBackup = join(themeDir, 'client.backup')
+      const serverBackup = join(themeDir, 'server.backup')
+
+      console.log('[Build] Backing up build outputs...')
+      if (onBuildProgress) onBuildProgress('Backing up current build...', 'stdout', 0)
+
+      // Clean any existing backups first
+      for (const backup of [clientBackup, serverBackup]) {
+        if (fs.existsSync(backup)) {
+          try {
+            fs.rmSync(backup, { recursive: true, force: true })
+          } catch (err) {
+            console.error(`[Build] Failed to clean old backup ${backup}:`, err.message)
+          }
+        }
+      }
+
+      // Move current dirs to backup
+      const backups: Array<{ from: string; to: string }> = []
+      for (const [dir, backup] of [[clientDir, clientBackup], [serverDir, serverBackup]]) {
+        if (fs.existsSync(dir)) {
+          try {
+            fs.renameSync(dir, backup)
+            backups.push({ from: backup, to: dir })
+            console.log(`[Build] Backed up ${dir}`)
+          } catch (err) {
+            console.error(`[Build] Failed to backup ${dir}:`, err.message)
+          }
+        }
+      }
+
+      return backups
+    }
+
+    // Helper to restore build outputs from backup (on build failure)
+    const restoreBuildOutputs = (backups: Array<{ from: string; to: string }>) => {
+      console.log('[Build] Restoring previous build from backup...')
+      if (onBuildProgress) onBuildProgress('Restoring previous build...', 'stderr', 0)
+
+      for (const { from, to } of backups) {
+        if (fs.existsSync(from)) {
+          try {
+            // Remove any partial build output first
+            if (fs.existsSync(to)) {
+              fs.rmSync(to, { recursive: true, force: true })
+            }
+            fs.renameSync(from, to)
+            console.log(`[Build] Restored ${to}`)
+          } catch (err) {
+            console.error(`[Build] Failed to restore ${to}:`, err.message)
+          }
+        }
+      }
+    }
+
+    // Helper to clean up backups after successful build
+    const cleanupBackups = () => {
+      const clientBackup = join(themeDir, 'client.backup')
+      const serverBackup = join(themeDir, 'server.backup')
+
+      for (const backup of [clientBackup, serverBackup]) {
+        if (fs.existsSync(backup)) {
+          try {
+            fs.rmSync(backup, { recursive: true, force: true })
+            console.log(`[Build] Cleaned up backup ${backup}`)
+          } catch (err) {
+            console.error(`[Build] Failed to clean backup ${backup}:`, err.message)
+          }
+        }
+      }
+    }
+
     // Helper to check if vite is properly installed (symlink not corrupted)
     const isViteCorrupted = () => {
       try {
@@ -330,10 +406,22 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
         }
 
         await runNpmInstall()
-        const result = await runNpmBuild()
-        buildInProgress = false
-        if (onBuildComplete) onBuildComplete(null, result)
-        return result
+
+        // Backup build outputs before building (for restore on failure)
+        const backups = backupBuildOutputs()
+
+        try {
+          const result = await runNpmBuild()
+          // Success - clean up backups
+          cleanupBackups()
+          buildInProgress = false
+          if (onBuildComplete) onBuildComplete(null, result)
+          return result
+        } catch (buildError: any) {
+          // Build failed - restore from backup
+          restoreBuildOutputs(backups)
+          throw buildError
+        }
       } catch (error: any) {
         // If this is already a retry, fail permanently
         if (isRetry) {
@@ -352,11 +440,23 @@ export default async ({ knex, table, onBuildStart, onBuildProgress, onBuildCompl
         try {
           await deleteNodeModules()
           await runNpmInstall()
-          const result = await runNpmBuild()
-          buildInProgress = false
-          console.log('[Build] Recovery successful!')
-          if (onBuildComplete) onBuildComplete(null, result)
-          return result
+
+          // Backup build outputs before retry build
+          const backups = backupBuildOutputs()
+
+          try {
+            const result = await runNpmBuild()
+            // Success - clean up backups
+            cleanupBackups()
+            buildInProgress = false
+            console.log('[Build] Recovery successful!')
+            if (onBuildComplete) onBuildComplete(null, result)
+            return result
+          } catch (buildError: any) {
+            // Build failed - restore from backup
+            restoreBuildOutputs(backups)
+            throw buildError
+          }
         } catch (retryError: any) {
           buildInProgress = false
           console.error('[Build] Recovery also failed:', retryError instanceof Error ? retryError.message : String(retryError))
