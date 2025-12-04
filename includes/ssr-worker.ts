@@ -19,6 +19,18 @@ interface WorkerData {
 const { themeDir, url, buildHash, theme, accessToken, windowWidth } = workerData as WorkerData
 const serverEntry = path.join(themeDir, 'server', 'entry-server.js')
 const clientTemplate = path.join(themeDir, 'client', 'index.html')
+const clientAssetsDir = path.join(themeDir, 'client', 'assets')
+
+// Find main CSS file for critical CSS injection (prevents FOUC)
+function findMainCssFile(): string | null {
+  try {
+    const files = fs.readdirSync(clientAssetsDir)
+    const mainCss = files.find(f => f.startsWith('main-') && f.endsWith('.css'))
+    return mainCss ? `/assets/${mainCss}` : null
+  } catch {
+    return null
+  }
+}
 
 async function runModule() {
   try {
@@ -79,6 +91,12 @@ async function runModule() {
 
     // Pass SSR globals to client for @vueplayio components
     html = html.replace('<head>', `<head><script>window.__SSR_WINDOW_WIDTH__ = ${windowWidth || 1280}</script>`)
+
+    // Inject main CSS stylesheet to prevent FOUC (Flash of Unstyled Content)
+    const mainCss = findMainCssFile()
+    if (mainCss) {
+      html = html.replace('</head>', `<link rel="stylesheet" href="${mainCss}"></head>`)
+    }
 
     // Return the fully assembled HTML
     parentPort?.postMessage(html)
