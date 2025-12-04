@@ -135,7 +135,8 @@ let cachedGitServer = null
 let gitServerInitPromise = null
 
 // SSR cache TTL (uses SharedSSRCache for cross-worker caching)
-const SSR_CACHE_TTL_MS = 2000 // 2 sec - shared across all workers
+// Cache is automatically invalidated after builds via reloadAfterBuild() -> invalidateSSRCache()
+const SSR_CACHE_TTL_MS = 60000 // 60 sec - shared across all workers
 
 /**
  * @param {HTMLDrop.ThemeRequest} params
