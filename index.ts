@@ -45,8 +45,7 @@ async function runDynamicModule(workerData: SSRWorkerData): Promise<string> {
       console.log(`[SSR] Starting worker for ${workerData.url}`)
 
       worker = new Worker(ssrWorkerPath, {
-        workerData,
-        execArgv: ['--import', 'tsx'] // Enable TypeScript support in worker
+        workerData
       })
 
       // Add timeout to prevent worker from hanging indefinitely
